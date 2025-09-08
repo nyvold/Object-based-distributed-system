@@ -7,16 +7,17 @@ import java.rmi.server.UnicastRemoteObject;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 
-public class Proxy{
+public class Proxy {
 
     // our proxy must:
     // - distribute requests based on clients zone
-    // - have a overview of each servers workload, this overview is updated every 18 requests?
+    // - have a overview of each servers workload, this overview is updated every 18
+    // requests?
     // - request delegation happends in independent thread
     // - workload updating happends in separate thread
-    // - assign zone to servers in ascending order, and record servers IP adress and port
+    // - assign zone to servers in ascending order, and record servers IP adress and
+    // port
     // - simulate connection time between client and server
-
 
     // rules:
     // step 1: if server overloaded (18>=requests)
@@ -35,14 +36,23 @@ public class Proxy{
     // 4. register servers (via API?)
     // 5. calculate client-server connection delay
 
-    // proxy gets request from client, and returns a server that can handle the request
+    // proxy gets request from client, and returns a server that can handle the
+    // request
     // public Proxy(){
-    //     Registry registry = LocateRegistry.getRegistry();
+    // Registry registry = LocateRegistry.getRegistry();
     // }
 
+    private final Registry registry;
+    private final LoadBalancer balancer;
+    private final Refresher refresher;
 
-    public ServerInterface registerServer() {
-        
+    public Proxy(
+            int size, // the amount of servers in the ring
+            Registry registry
+    ) {
+        this.registry = registry;
+        this.balancer = new LoadBalancer(registry);
+        this.refresher = new Refresher(registry);
     }
-    
+
 }
