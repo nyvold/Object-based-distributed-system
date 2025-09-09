@@ -5,6 +5,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.rmi.AlreadyBoundException;
+import java.rmi.NotBoundException;
 
 public class Server implements ServerInterface{
     private String address;
@@ -21,20 +22,26 @@ public class Server implements ServerInterface{
 
     public static void main(String[] args){
         try {
-            // temporary!
-            int zone = 1; //get zone via proxys registerServer()
-            int port = 1099 + zone;
             String address = "localhost";
-            String bindingName = "server_zone_" + zone;
-            // temporary!
+            int port = 0; 
+            int zone = -1;
+            String bindingName = "temp";
 
             Server server = new Server(address, port, zone, bindingName);
             ServerInterface serverStub = (ServerInterface) UnicastRemoteObject.exportObject(server, port);
-            Registry registry = LocateRegistry.getRegistry(address, port);
-            registry.rebind(bindingName, serverStub);
-        } catch (RemoteException e) {
+
+            Registry registry = LocateRegistry.getRegistry(address, 1099);
+            ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
+            int assignedZone = proxy.registerServer(address, port, bindingName, serverStub);
+            String assignedBindingName = "server_zone_" + assignedZone;
+
+            server.zone = assignedZone;
+            server.bindingName = assignedBindingName;
+            registry.rebind(assignedBindingName, serverStub);
+            
+        } catch (RemoteException | NotBoundException e) {
             e.printStackTrace();
-        }
+        } 
     }
 
     @Override
