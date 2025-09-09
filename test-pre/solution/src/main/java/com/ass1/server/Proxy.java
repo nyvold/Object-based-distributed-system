@@ -45,7 +45,7 @@ public class Proxy {
     private final Registry registry;
     private final LoadBalancer balancer;
     private final Refresher refresher;
-
+    
     public Proxy(
             int size, // the amount of servers in the ring
             Registry registry

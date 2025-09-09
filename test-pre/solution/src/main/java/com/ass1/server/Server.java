@@ -41,4 +41,10 @@ public class Server implements ServerInterface{
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'getNumberofCountriesMM'");
     }
+
+    @Override
+    public String toString() {
+        // should return port and zone
+         return "";
+    }
 }
