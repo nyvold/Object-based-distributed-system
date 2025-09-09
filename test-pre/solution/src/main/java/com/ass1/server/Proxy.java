@@ -4,6 +4,7 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.HashMap;
 import java.util.Map;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
@@ -53,11 +54,11 @@ public class Proxy implements ProxyInterface {
     private int nextZone = 1;
 
     // used to send to client
-    private Map<Integer, ServerConnection> serverConnections; // <zone, ServerConnection>
+    private Map<Integer, ServerConnection> serverConnections = new HashMap<>(); // <zone, ServerConnection>
     // used to get queue, i.e proxys own use
-    private Map<Integer, ServerInterface> serverStubs; // <zone, ServerInterface>
+    private Map<Integer, ServerInterface> serverStubs = new HashMap<>(); // <zone, ServerInterface>
     // updated by polling servers, used to check for best server
-    private Map<Integer, Integer> serverLoads; // <zone, serverLoad>
+    private Map<Integer, Integer> serverLoads = new HashMap<>(); // <zone, serverLoad>
 
     public Proxy(
             int size, // the amount of servers in the ring
@@ -85,6 +86,7 @@ public class Proxy implements ProxyInterface {
             Proxy proxy = new Proxy(numberOfServers, registry);
             ProxyInterface stub = (ProxyInterface) UnicastRemoteObject.exportObject(proxy, 0);
             registry.rebind("Proxy", stub); // rebind instead of bind so we dont have to unbind "Proxy" every time we restart or redeploy (because of AlreadyBoundException)
+            System.out.println("[Proxy] Proxy started and bound in registry as 'Proxy' on port 1099.");
         } catch (RemoteException e) {
             e.printStackTrace();
         }
@@ -101,7 +103,6 @@ public class Proxy implements ProxyInterface {
         serverConnections.put(zone, conn);
         serverStubs.put(zone, serverStub);
         serverLoads.put(zone, 0); // server load starts at 0
-        
         return zone;
     }
 }
