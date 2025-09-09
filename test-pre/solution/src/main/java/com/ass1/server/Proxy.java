@@ -83,8 +83,8 @@ public class Proxy implements ProxyInterface {
             int numberOfServers = 5;
             Registry registry = LocateRegistry.createRegistry(1099);
             Proxy proxy = new Proxy(numberOfServers, registry);
-            ProxyInterface stub = (ProxyInterface) UnicastRemoteObject.exportObject(proxy, port?)
-
+            ProxyInterface stub = (ProxyInterface) UnicastRemoteObject.exportObject(proxy, 0);
+            registry.rebind("Proxy", stub); // rebind instead of bind so we dont have to unbind "Proxy" every time we restart or redeploy (because of AlreadyBoundException)
         } catch (RemoteException e) {
             e.printStackTrace();
         }
@@ -104,6 +104,4 @@ public class Proxy implements ProxyInterface {
         
         return zone;
     }
-
-
 }

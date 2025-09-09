@@ -37,8 +37,10 @@ public class Server implements ServerInterface{
 
             server.zone = assignedZone;
             server.bindingName = assignedBindingName;
+            System.out.println("[Server] Registered server in proxy: " + bindingName + " (zone " + zone + ", address " + address + ", port " + port + ")");
             registry.rebind(assignedBindingName, serverStub);
-            
+            System.out.println("[Server] " + server.toString() + "bound in registry");
+
         } catch (RemoteException | NotBoundException e) {
             e.printStackTrace();
         } 
@@ -71,7 +73,7 @@ public class Server implements ServerInterface{
     @Override
     public String toString() {
         // should return port and zone
-         return "";
+         return bindingName + "on port: " + port;
     }
 
     public String getAddress() { return address; }
