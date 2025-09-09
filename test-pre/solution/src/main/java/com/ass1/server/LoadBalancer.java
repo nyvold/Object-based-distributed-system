@@ -1,30 +1,58 @@
 package com.ass1.server;
 
 import java.rmi.registry.Registry;
+import java.util.ArrayList;
 import java.util.Map;
 
 public class LoadBalancer {
     // The load balancer should handle load balancing functions
+    private static int MAX_LOAD = 18;
 
     private Registry registry;
     private Map<Integer, ServerInterface> serverStubs;
     private Map<Integer, Integer> serverLoads;
 
-    public LoadBalancer(Registry registry, Map<Integer, ServerInterface> serverStubs, Map<Integer, Integer> serverLoads){
+    public LoadBalancer(
+        Registry registry,
+        Map<Integer, ServerInterface> serverStubs, 
+        Map<Integer, Integer> serverLoads
+    ){
         this.registry = registry;
         this.serverStubs = serverStubs;
         this.serverLoads = serverLoads;
     }
 
-    public ServerInterface selectBestServerForZone(int clientZone){
-        throw new UnsupportedOperationException("Not implemented.");
+    public int selectBestServerForZone(int clientZone){
+        ArrayList<Integer> availableServers = new ArrayList<Integer>();
+        int minLoad = Integer.MAX_VALUE;
+        for (Map.Entry<Integer, Integer> entry : serverLoads.entrySet()) {
+            int zone = entry.getKey();
+            int load = entry.getValue();
+            if (load < MAX_LOAD) {
+                if (load < minLoad) {
+                    minLoad = load;
+                    availableServers.clear();
+                    availableServers.add(zone);
+                } else if (load == minLoad) {
+                    availableServers.add(zone);
+                }
+            }
+        }
+        if (!availableServers.isEmpty()) {
+            return getNearestServer(clientZone, availableServers);
+        }
+        if (serverLoads.containsKey(clientZone)) {
+            return clientZone;
+        }
+
+        return getNearestServer(clientZone, new ArrayList<Integer>(serverStubs.keySet()));
     }
 
     /*
      * @param fromZone the zone which the client is requesting from
      * @return the integer that belongs to the nearest zone
      */
-    public int getNearestServer(int fromZone){
+    public int getNearestServer(int fromZone, ArrayList<Integer> zones) {
         throw new UnsupportedOperationException("Not implemented.");
     }
 

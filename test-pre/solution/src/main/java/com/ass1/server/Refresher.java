@@ -19,10 +19,12 @@ public class Refresher {
 
     private Map<Integer, Integer> serverLoads;
 
-    public Refresher(Registry registry, Map<Integer, Integer> serverLoads){
+    public Refresher(
+        Registry registry, 
+        Map<Integer, Integer> serverLoads
+    ){
         this.registry = registry;
         this.serverLoads = serverLoads;
-
         // start thread for periodic refreshing
     }
 

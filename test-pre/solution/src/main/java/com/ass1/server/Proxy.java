@@ -55,15 +55,12 @@ public class Proxy implements ProxyInterface {
 
     // used to send to client
     private Map<Integer, ServerConnection> serverConnections = new HashMap<>(); // <zone, ServerConnection>
-    // used to get queue, i.e proxys own use
+    // used for proxys own use
     private Map<Integer, ServerInterface> serverStubs = new HashMap<>(); // <zone, ServerInterface>
     // updated by polling servers, used to check for best server
     private Map<Integer, Integer> serverLoads = new HashMap<>(); // <zone, serverLoad>
 
-    public Proxy(
-            int size, // the amount of servers in the ring
-            Registry registry
-    ) {
+    public Proxy(int size, Registry registry) {
         this.registry = registry;
         this.balancer = new LoadBalancer(registry, serverStubs, serverLoads);
         this.refresher = new Refresher(registry, serverLoads);

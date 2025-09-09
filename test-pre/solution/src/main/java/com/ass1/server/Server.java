@@ -13,7 +13,12 @@ public class Server implements ServerInterface{
     private int zone;
     private String bindingName;
 
-    public Server(String address, int port, int zone, String bindingName) {
+    public Server(
+        String address, 
+        int port, 
+        int zone, 
+        String bindingName
+    ) {
         this.address = address;
         this.port = port;
         this.zone = zone;
