@@ -7,13 +7,13 @@ import java.rmi.server.UnicastRemoteObject;
 import java.rmi.AlreadyBoundException;
 
 public class Server implements ServerInterface{
-    private String adress;
+    private String address;
     private int port;
     private int zone;
     private String bindingName;
 
-    public Server(String adress, int port, int zone, String bindingName) {
-        this.adress = adress;
+    public Server(String address, int port, int zone, String bindingName) {
+        this.address = address;
         this.port = port;
         this.zone = zone;
         this.bindingName = bindingName;
@@ -22,17 +22,17 @@ public class Server implements ServerInterface{
     public static void main(String[] args){
         try {
             // temporary!
-            int zone = 1;
+            int zone = 1; //get zone via proxys registerServer()
             int port = 1099 + zone;
-            String adress = "localhost";
+            String address = "localhost";
             String bindingName = "server_zone_" + zone;
             // temporary!
 
-            Server server = new Server(adress, port, zone, bindingName);
+            Server server = new Server(address, port, zone, bindingName);
             ServerInterface serverStub = (ServerInterface) UnicastRemoteObject.exportObject(server, port);
-            Registry registry = LocateRegistry.getRegistry(adress, port);
-            registry.bind(bindingName, serverStub);
-        } catch (RemoteException | AlreadyBoundException e) {
+            Registry registry = LocateRegistry.getRegistry(address, port);
+            registry.rebind(bindingName, serverStub);
+        } catch (RemoteException e) {
             e.printStackTrace();
         }
     }
@@ -67,7 +67,7 @@ public class Server implements ServerInterface{
          return "";
     }
 
-    public String getAdress() { return adress; }
+    public String getAddress() { return address; }
     public int getPort() { return port; }
     public int getZone() {return zone; }
     public String getBindingName() {return bindingName; }

@@ -78,6 +78,17 @@ public class Proxy implements ProxyInterface {
 
     
     public static void main(String[] args) {
+        // proxy binds itself in the registry so servers can find it and call registerServer()
+        try {
+            int numberOfServers = 5;
+            Registry registry = LocateRegistry.createRegistry(1099);
+            Proxy proxy = new Proxy(numberOfServers, registry);
+            ProxyInterface stub = (ProxyInterface) UnicastRemoteObject.exportObject(proxy, port?)
+
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+
         // initialize all servers here?
         // call registerServer N times (where N is amount of zones)
     }
@@ -88,7 +99,7 @@ public class Proxy implements ProxyInterface {
         int zone = nextZone++;
         ServerConnection conn = new ServerConnection(address, port, zone, bindingName);
         serverConnections.put(zone, conn);
-        serverStubs.put(zone, stub);
+        serverStubs.put(zone, serverStub);
         serverLoads.put(zone, 0); // server load starts at 0
         
         return zone;
