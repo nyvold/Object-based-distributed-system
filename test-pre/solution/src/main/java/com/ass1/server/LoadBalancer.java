@@ -53,7 +53,22 @@ public class LoadBalancer {
      * @return the integer that belongs to the nearest zone
      */
     public int getNearestServer(int fromZone, ArrayList<Integer> zones) {
-        throw new UnsupportedOperationException("Not implemented.");
+        // gets closest clockwise
+        if (zones == null || zones.isEmpty()) {
+            System.out.println("[LoadBalancer] getNearestServer(): zones is empty or null, check if servers active");
+            throw new IllegalArgumentException("No zones available to select from.");
+        }
+        int minDist = 5;
+        int closest = -1;
+        for (int zone : zones) {
+            int dist = distance(fromZone, zone, 5);
+            if(dist == 0) dist = 5;
+            if(dist < minDist) {
+                minDist = dist;
+                closest = zone;
+            }
+        }
+        return closest;
     }
 
     /*
