@@ -38,6 +38,7 @@ public class Refresher {
         try{
             // get server load
             // set the size of the witing queue
+            // refresh must happend in own thread to not interupt normal server activity?
         }catch(Exception e){
             // set the queue size to INTEGER max value to indicate that the servicer is unavailable for more tasks
         }

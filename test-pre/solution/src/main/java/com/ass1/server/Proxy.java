@@ -8,7 +8,7 @@ import java.util.Map;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 
-public class Proxy {
+public class Proxy implements ProxyInterface {
 
     // Proxy composition: Proxy, Refresher, LoadBalancer
     // Proxy responsability: entry point for client requests, registration of servers, and coordination
@@ -50,6 +50,8 @@ public class Proxy {
     private final LoadBalancer balancer;
     private final Refresher refresher;
 
+    private int nextZone = 1;
+
     // used to send to client
     private Map<Integer, ServerConnection> serverConnections; // <zone, ServerConnection>
     // used to get queue, i.e proxys own use
@@ -78,6 +80,18 @@ public class Proxy {
     public static void main(String[] args) {
         // initialize all servers here?
         // call registerServer N times (where N is amount of zones)
+    }
+
+    @Override
+    public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) {
+        // should server call proxy to register
+        int zone = nextZone++;
+        ServerConnection conn = new ServerConnection(address, port, zone, bindingName);
+        serverConnections.put(zone, conn);
+        serverStubs.put(zone, stub);
+        serverLoads.put(zone, 0); // server load starts at 0
+        
+        return zone;
     }
 
 
