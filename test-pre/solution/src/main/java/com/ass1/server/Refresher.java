@@ -1,6 +1,7 @@
 package com.ass1.server;
 
 import java.rmi.registry.Registry;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -16,8 +17,11 @@ public class Refresher {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final ExecutorService ioPool = Executors.newCachedThreadPool();
 
-    public Refresher(Registry registry){
+    private Map<Integer, Integer> serverLoads;
+
+    public Refresher(Registry registry, Map<Integer, Integer> serverLoads){
         this.registry = registry;
+        this.serverLoads = serverLoads;
 
         // start thread for periodic refreshing
     }
@@ -26,6 +30,7 @@ public class Refresher {
         // get server from registry
         // get assignemnt count for server
         // increment assignment count for server
+        // counter must run in own thread to not prevent normal server activities
         throw new UnsupportedOperationException("Not implemented.");
     }
 

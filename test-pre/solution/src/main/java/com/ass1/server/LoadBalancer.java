@@ -1,17 +1,22 @@
 package com.ass1.server;
 
 import java.rmi.registry.Registry;
+import java.util.Map;
 
 public class LoadBalancer {
     // The load balancer should handle load balancing functions
 
     private Registry registry;
+    private Map<Integer, ServerInterface> serverStubs;
+    private Map<Integer, Integer> serverLoads;
 
-    public LoadBalancer(Registry registry){
+    public LoadBalancer(Registry registry, Map<Integer, ServerInterface> serverStubs, Map<Integer, Integer> serverLoads){
         this.registry = registry;
+        this.serverStubs = serverStubs;
+        this.serverLoads = serverLoads;
     }
 
-    public Server selectServerForZone(int clientZone){
+    public ServerInterface selectBestServerForZone(int clientZone){
         throw new UnsupportedOperationException("Not implemented.");
     }
 

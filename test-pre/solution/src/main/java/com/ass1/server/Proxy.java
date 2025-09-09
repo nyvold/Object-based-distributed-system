@@ -10,6 +10,9 @@ import java.rmi.NotBoundException;
 
 public class Proxy {
 
+    // Proxy composition: Proxy, Refresher, LoadBalancer
+    // Proxy responsability: entry point for client requests, registration of servers, and coordination
+
     // our proxy must:
     // - distribute requests based on clients zone
     // - have a overview of each servers workload, this overview is updated every 18
@@ -47,29 +50,34 @@ public class Proxy {
     private final LoadBalancer balancer;
     private final Refresher refresher;
 
-    private Map<Integer, ServerInterface> servers;
+    // used to send to client
+    private Map<Integer, ServerConnection> serverConnections; // <zone, ServerConnection>
+    // used to get queue, i.e proxys own use
+    private Map<Integer, ServerInterface> serverStubs; // <zone, ServerInterface>
+    // updated by polling servers, used to check for best server
+    private Map<Integer, Integer> serverLoads; // <zone, serverLoad>
 
     public Proxy(
             int size, // the amount of servers in the ring
             Registry registry
     ) {
         this.registry = registry;
-        this.balancer = new LoadBalancer(registry);
-        this.refresher = new Refresher(registry);
+        this.balancer = new LoadBalancer(registry, serverStubs, serverLoads);
+        this.refresher = new Refresher(registry, serverLoads);
     }
 
-    public ServerConnection getServer(int zone) {
-        System.out.println("Client request from zone: " + zone);
+    public void registerServer(String adress, int port, int zone, String bindingName, ServerInterface stub) {
+        // should server call proxy to register
+        ServerConnection conn = new ServerConnection(adress, port, zone, bindingName);
+        serverConnections.put(zone, conn);
+        serverStubs.put(zone, stub);
+        serverLoads.put(zone, 0); // server load starts at 0
+    }
 
-        ServerInterface server = balancer.selectServerForZone(zone);
-        if (server != null) {
-            System.out.println("Server returned: " + server.toString());
-            return server;
-        }
-        else {
-            return null;
-        }
-        
+    
+    public static void main(String[] args) {
+        // initialize all servers here?
+        // call registerServer N times (where N is amount of zones)
     }
 
 
