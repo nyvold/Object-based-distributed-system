@@ -4,6 +4,7 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.Map;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 
@@ -45,7 +46,9 @@ public class Proxy {
     private final Registry registry;
     private final LoadBalancer balancer;
     private final Refresher refresher;
-    
+
+    private Map<Integer, ServerInterface> servers;
+
     public Proxy(
             int size, // the amount of servers in the ring
             Registry registry
@@ -54,5 +57,20 @@ public class Proxy {
         this.balancer = new LoadBalancer(registry);
         this.refresher = new Refresher(registry);
     }
+
+    public ServerConnection getServer(int zone) {
+        System.out.println("Client request from zone: " + zone);
+
+        ServerInterface server = balancer.selectServerForZone(zone);
+        if (server != null) {
+            System.out.println("Server returned: " + server.toString());
+            return server;
+        }
+        else {
+            return null;
+        }
+        
+    }
+
 
 }
