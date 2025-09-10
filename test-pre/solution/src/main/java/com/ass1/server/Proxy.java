@@ -66,12 +66,14 @@ public class Proxy implements ProxyInterface {
         this.refresher = new Refresher(registry, serverLoads);
     }
 
-    public void registerServer(String adress, int port, int zone, String bindingName, ServerInterface stub) {
+    public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) {
         // should server call proxy to register
-        ServerConnection conn = new ServerConnection(adress, port, zone, bindingName);
+        int zone = nextZone++;
+        ServerConnection conn = new ServerConnection(address, port, zone, bindingName);
         serverConnections.put(zone, conn);
-        serverStubs.put(zone, stub);
+        serverStubs.put(zone, serverStub);
         serverLoads.put(zone, 0); // server load starts at 0
+        return zone;
     }
 
     
@@ -90,16 +92,5 @@ public class Proxy implements ProxyInterface {
 
         // initialize all servers here?
         // call registerServer N times (where N is amount of zones)
-    }
-
-    @Override
-    public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) {
-        // should server call proxy to register
-        int zone = nextZone++;
-        ServerConnection conn = new ServerConnection(address, port, zone, bindingName);
-        serverConnections.put(zone, conn);
-        serverStubs.put(zone, serverStub);
-        serverLoads.put(zone, 0); // server load starts at 0
-        return zone;
     }
 }
