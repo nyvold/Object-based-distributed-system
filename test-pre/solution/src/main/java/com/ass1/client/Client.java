@@ -2,15 +2,17 @@ package com.ass1.client;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
-//DISCLAIMER: THIS CODE IS NOT COMPLETE, BUT ALMOST
-public class Client {
 
+public class Client {
+    
     // Query class to store each parsed query
-    public static class Query {
+    public static class Query { 
         public String methodName;
         public List<String> args;
         public int zone;
@@ -30,6 +32,14 @@ public class Client {
     public List<Query> queries = new ArrayList<>();
 
     public static void main(String[] args) {
+        // Overwrite (clear) output.txt at the start
+        try (FileWriter fw = new FileWriter("output.txt", false)) {
+            // false = overwrite mode
+            // Just open and close to clear the file
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
         Client client = new Client();
         client.parseInputFile();
         System.out.println("Total queries: " + client.queries.size());
@@ -47,7 +57,7 @@ public class Client {
 
     public void sendQueries() { //send queries to server with 10ms delay
         for (Query query : queries) {
-
+            writeToFile(query); //dummy values for times and serverZone
             System.out.println("Sending query: " + query);
             try {
                 Thread.sleep(10);
@@ -57,6 +67,7 @@ public class Client {
         }
     }
 
+    // Parses the input file and populates the queries list
     private void parseInputFile() {
         try {
             File file = new File("exercise_1_input.txt");
@@ -98,14 +109,13 @@ public class Client {
             e.printStackTrace();
         }
     }
-
-    public void writeToFile(String filename, String content) {
-        // Write results from server to file
-        // For each remote invocation, the client will print the 
-        // result of the invocation and the time it took
-        // Output file format : <result> <input query> (turnaround time: YY ms, execution time:
-        // ZZ ms, waiting time: TT ms, processed by Server <server#>)
-        // eg:- : 9362428 getPopulationofCountry Sweden Zone:1 (turnaround time: 120
-        // ms, execution time: 10 ms, waiting time: 100 ms, processed by Server 1)
+    //Testing the filewriter, should be adjusted to write the results from the server invocation
+    public void writeToFile(Query query) {
+        String outputLine = query.toString() + System.lineSeparator();
+        try (FileWriter fw = new FileWriter("output.txt", true)) { // true for append mode
+            fw.write(outputLine);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
