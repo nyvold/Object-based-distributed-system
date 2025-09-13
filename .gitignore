@@ -25,3 +25,8 @@ replay_pid*
 
 ds_store
 .ds_store
+
+.env*
+ 
+# Ignore local Postgres data directories if bind-mounted
+infra/db/*/data/*
