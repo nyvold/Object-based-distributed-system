@@ -25,3 +25,5 @@ replay_pid*
 
 ds_store
 .ds_store
+
+.env*
