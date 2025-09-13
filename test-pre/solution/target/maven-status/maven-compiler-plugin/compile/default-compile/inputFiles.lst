@@ -1,0 +1,11 @@
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/Main.java
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/client/Client.java
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/server/Latency.java
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/server/LoadBalancer.java
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/server/Proxy.java
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/server/ProxyInterface.java
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/server/Refresher.java
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/server/Servant.java
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/server/Server.java
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/server/ServerConnection.java
+/Users/kristinebraathen/Documents/IN5020/in5020-assignment-1/test-pre/solution/src/main/java/com/ass1/server/ServerInterface.java

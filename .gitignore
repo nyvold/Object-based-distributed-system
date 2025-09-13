@@ -30,3 +30,4 @@ ds_store
  
 # Ignore local Postgres data directories if bind-mounted
 infra/db/*/data/*
+
