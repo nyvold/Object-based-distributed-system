@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class Refresher {
 
@@ -35,6 +36,8 @@ public class Refresher {
         // counter must run in own thread to not prevent normal server activities
         throw new UnsupportedOperationException("Not implemented.");
     }
+
+    private void refreshAllServers() {}
 
     private void refreshServer(Server server){
         try{

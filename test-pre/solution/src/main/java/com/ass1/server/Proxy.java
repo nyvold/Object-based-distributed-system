@@ -60,10 +60,16 @@ public class Proxy implements ProxyInterface {
     // updated by polling servers, used to check for best server
     private Map<Integer, Integer> serverLoads = new HashMap<>(); // <zone, serverLoad>
 
+    private Map<Integer, Integer> requestCounters = new HashMap<>();
+
     public Proxy(int size, Registry registry) {
         this.registry = registry;
         this.balancer = new LoadBalancer(registry, serverStubs, serverLoads);
         this.refresher = new Refresher(registry, serverLoads);
+    }
+
+    public ServerConnection connectToServer(int zone) {
+        
     }
 
     public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) {
@@ -73,6 +79,7 @@ public class Proxy implements ProxyInterface {
         serverConnections.put(zone, conn);
         serverStubs.put(zone, serverStub);
         serverLoads.put(zone, 0); // server load starts at 0
+        requestCounters.put(zone, 0);
         return zone;
     }
 
