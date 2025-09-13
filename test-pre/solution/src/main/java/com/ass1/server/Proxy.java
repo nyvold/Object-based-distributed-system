@@ -6,6 +6,9 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
 import java.util.Map;
+
+import com.ass1.client.Client.Query;
+
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 
@@ -69,7 +72,10 @@ public class Proxy implements ProxyInterface {
     }
 
     public ServerConnection connectToServer(int zone) {
-        
+        // consider more robust checks
+        int bestZone = balancer.selectBestServerForZone(zone);
+        ServerConnection conn = serverConnections.get(bestZone);
+        return conn;
     }
 
     public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) {
