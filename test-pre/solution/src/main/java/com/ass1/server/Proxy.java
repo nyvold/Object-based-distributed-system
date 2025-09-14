@@ -54,7 +54,7 @@ public class Proxy implements ProxyInterface {
     private final LoadBalancer balancer;
     private final Refresher refresher;
 
-    private int nextZone = 0;
+    private int nextZone = 1;
 
     private Map<Integer, ServerConnection> serverConnections = new HashMap<>(); // <zone, ServerConnection>
     private Map<Integer, ServerInterface> serverStubs = new HashMap<>(); // <zone, ServerInterface>
