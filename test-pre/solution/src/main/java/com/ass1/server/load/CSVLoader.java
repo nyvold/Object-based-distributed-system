@@ -7,10 +7,10 @@ import java.sql.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public final class CsvLoader {
+public final class CSVLoader {
     private final DataSource ds;
 
-    public CsvLoader(DataSource ds) { this.ds = ds; }
+    public CSVLoader(DataSource ds) { this.ds = ds; }
 
     // Assumes CSV columns: geoname_id,name,country_code,country_name,population,timezone,lat,lon
     public void load(File csv) throws Exception {
