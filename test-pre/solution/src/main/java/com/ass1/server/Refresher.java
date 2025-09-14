@@ -12,7 +12,7 @@ public class Refresher {
     // Tracks assignment number state for servers, on behalf of the proxy
     // Keeps references to the servers to execute refresh
 
-    private static int MAX_POLL_ASSIGNMENTS = 18;
+    public static int MAX_POLL_ASSIGNMENTS = 18;
 
     private final Registry registry;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
@@ -39,13 +39,22 @@ public class Refresher {
 
     private void refreshAllServers() {}
 
-    private void refreshServer(Server server){
+    private void refreshServer(int zone){
         try{
             // get server load
             // set the size of the witing queue
             // refresh must happend in own thread to not interupt normal server activity?
-        }catch(Exception e){
+            String bindingName = "server_zone_" + zone;
+            ServerInterface server = (ServerInterface) registry.lookup(bindingName);
+            int load = server.getCurrentLoad();
+            serverLoads.put(zone, load);
+        } catch(Exception e) {
             // set the queue size to INTEGER max value to indicate that the servicer is unavailable for more tasks
+            serverLoads.put(zone, Integer.MAX_VALUE);
         }
+    }
+
+    public void refreshServerAsync(int zone) {
+        ioPool.submit(() -> refreshServer(zone));
     }
 }

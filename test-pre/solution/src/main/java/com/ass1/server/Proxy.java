@@ -63,7 +63,7 @@ public class Proxy implements ProxyInterface {
     // updated by polling servers, used to check for best server
     private Map<Integer, Integer> serverLoads = new HashMap<>(); // <zone, serverLoad>
 
-    private Map<Integer, Integer> requestCounters = new HashMap<>();
+    private Map<Integer, Integer> requestCounters = new HashMap<>(); // <zone, count>
 
     public Proxy(int size, Registry registry) {
         this.registry = registry;
@@ -72,9 +72,17 @@ public class Proxy implements ProxyInterface {
     }
 
     public ServerConnection connectToServer(int zone) {
-        // consider more robust checks
         int bestZone = balancer.selectBestServerForZone(zone);
         ServerConnection conn = serverConnections.get(bestZone);
+
+        int count = requestCounters.getOrDefault(bestZone, 0) + 1;
+        if (count >= Refresher.MAX_POLL_ASSIGNMENTS) {
+            requestCounters.put(bestZone, 0);
+            refresher.refreshServerAsync(bestZone);
+        } else {
+            requestCounters.put(bestZone, count);
+        }
+
         return conn;
     }
 
