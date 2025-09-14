@@ -54,7 +54,7 @@ public class Proxy implements ProxyInterface {
     private final LoadBalancer balancer;
     private final Refresher refresher;
 
-    private int nextZone = 1;
+    private int nextZone = 0;
 
     private Map<Integer, ServerConnection> serverConnections = new HashMap<>(); // <zone, ServerConnection>
     private Map<Integer, ServerInterface> serverStubs = new HashMap<>(); // <zone, ServerInterface>
@@ -63,7 +63,7 @@ public class Proxy implements ProxyInterface {
 
     public Proxy(Registry registry) {
         this.registry = registry;
-        this.balancer = new LoadBalancer(registry, serverStubs, serverLoads);
+        this.balancer = new LoadBalancer(serverStubs, serverLoads);
         this.refresher = new Refresher(registry, serverLoads);
     }
 
@@ -83,12 +83,12 @@ public class Proxy implements ProxyInterface {
     }
 
     public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) {
-        // should server call proxy to register
         int zone = nextZone++;
         ServerConnection conn = new ServerConnection(address, port, zone, bindingName);
+
         serverConnections.put(zone, conn);
         serverStubs.put(zone, serverStub);
-        serverLoads.put(zone, 0); // server load starts at 0
+        serverLoads.put(zone, 0); 
         assignmentCounters.put(zone, 0);
         return zone;
     }

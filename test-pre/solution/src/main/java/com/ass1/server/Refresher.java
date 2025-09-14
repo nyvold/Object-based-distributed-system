@@ -1,5 +1,7 @@
 package com.ass1.server;
 
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
 import java.rmi.registry.Registry;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -26,14 +28,11 @@ public class Refresher {
 
     private void refreshServer(int zone){
         try{
-            // get server load
-            // set the size of the witing queue
-            // refresh must happend in own thread to not interupt normal server activity?
             String bindingName = "server_zone_" + zone;
             ServerInterface server = (ServerInterface) registry.lookup(bindingName);
             int load = server.getCurrentLoad();
             serverLoads.put(zone, load);
-        } catch(Exception e) {
+        } catch (NotBoundException | RemoteException | ClassCastException e) {
             serverLoads.put(zone, Integer.MAX_VALUE);
         }
     }
