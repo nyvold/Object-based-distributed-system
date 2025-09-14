@@ -56,16 +56,12 @@ public class Proxy implements ProxyInterface {
 
     private int nextZone = 1;
 
-    // used to send to client
     private Map<Integer, ServerConnection> serverConnections = new HashMap<>(); // <zone, ServerConnection>
-    // used for proxys own use
     private Map<Integer, ServerInterface> serverStubs = new HashMap<>(); // <zone, ServerInterface>
-    // updated by polling servers, used to check for best server
     private Map<Integer, Integer> serverLoads = new HashMap<>(); // <zone, serverLoad>
+    private Map<Integer, Integer> assignmentCounters = new HashMap<>(); // <zone, count>
 
-    private Map<Integer, Integer> requestCounters = new HashMap<>(); // <zone, count>
-
-    public Proxy(int size, Registry registry) {
+    public Proxy(Registry registry) {
         this.registry = registry;
         this.balancer = new LoadBalancer(registry, serverStubs, serverLoads);
         this.refresher = new Refresher(registry, serverLoads);
@@ -75,12 +71,12 @@ public class Proxy implements ProxyInterface {
         int bestZone = balancer.selectBestServerForZone(zone);
         ServerConnection conn = serverConnections.get(bestZone);
 
-        int count = requestCounters.getOrDefault(bestZone, 0) + 1;
+        int count = assignmentCounters.getOrDefault(bestZone, 0) + 1;
         if (count >= Refresher.MAX_POLL_ASSIGNMENTS) {
-            requestCounters.put(bestZone, 0);
+            assignmentCounters.put(bestZone, 0);
             refresher.refreshServerAsync(bestZone);
         } else {
-            requestCounters.put(bestZone, count);
+            assignmentCounters.put(bestZone, count);
         }
 
         return conn;
@@ -93,16 +89,15 @@ public class Proxy implements ProxyInterface {
         serverConnections.put(zone, conn);
         serverStubs.put(zone, serverStub);
         serverLoads.put(zone, 0); // server load starts at 0
-        requestCounters.put(zone, 0);
+        assignmentCounters.put(zone, 0);
         return zone;
     }
 
     
     public static void main(String[] args) {
         try {
-            int numberOfServers = 5;
             Registry registry = LocateRegistry.createRegistry(1099);
-            Proxy proxy = new Proxy(numberOfServers, registry);
+            Proxy proxy = new Proxy(registry);
             ProxyInterface stub = (ProxyInterface) UnicastRemoteObject.exportObject(proxy, 0);
             registry.rebind("Proxy", stub); // rebind instead of bind so we dont have to unbind "Proxy" every time we restart or redeploy (because of AlreadyBoundException)
             System.out.println("[Proxy] Proxy started and bound in registry as 'Proxy' on port 1099.");
