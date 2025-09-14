@@ -99,7 +99,6 @@ public class Proxy implements ProxyInterface {
 
     
     public static void main(String[] args) {
-        // proxy binds itself in the registry so servers can find it and call registerServer()
         try {
             int numberOfServers = 5;
             Registry registry = LocateRegistry.createRegistry(1099);
@@ -110,8 +109,5 @@ public class Proxy implements ProxyInterface {
         } catch (RemoteException e) {
             e.printStackTrace();
         }
-
-        // initialize all servers here?
-        // call registerServer N times (where N is amount of zones)
     }
 }
