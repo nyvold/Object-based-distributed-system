@@ -6,6 +6,9 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
 import java.util.Map;
+
+import com.ass1.client.Client.Query;
+
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 
@@ -53,44 +56,54 @@ public class Proxy implements ProxyInterface {
 
     private int nextZone = 1;
 
-    // used to send to client
     private Map<Integer, ServerConnection> serverConnections = new HashMap<>(); // <zone, ServerConnection>
-    // used for proxys own use
     private Map<Integer, ServerInterface> serverStubs = new HashMap<>(); // <zone, ServerInterface>
-    // updated by polling servers, used to check for best server
     private Map<Integer, Integer> serverLoads = new HashMap<>(); // <zone, serverLoad>
+    private Map<Integer, Integer> assignmentCounters = new HashMap<>(); // <zone, count>
 
-    public Proxy(int size, Registry registry) {
+    public Proxy(Registry registry) {
         this.registry = registry;
-        this.balancer = new LoadBalancer(registry, serverStubs, serverLoads);
+        this.balancer = new LoadBalancer(serverStubs, serverLoads);
         this.refresher = new Refresher(registry, serverLoads);
+    }
+
+    public ServerConnection connectToServer(int zone) {
+        int bestZone = balancer.selectBestServerForZone(zone);
+        ServerConnection conn = serverConnections.get(bestZone);
+
+        int count = assignmentCounters.getOrDefault(bestZone, 0) + 1;
+        if (count >= Refresher.MAX_POLL_ASSIGNMENTS) {
+            assignmentCounters.put(bestZone, 0);
+            refresher.refreshServerAsync(bestZone);
+        } else {
+            assignmentCounters.put(bestZone, count);
+        }
+
+        return conn;
     }
 
     public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) throws RemoteException {
         // should server call proxy to register
         int zone = nextZone++;
         ServerConnection conn = new ServerConnection(address, port, zone, bindingName);
+
         serverConnections.put(zone, conn);
         serverStubs.put(zone, serverStub);
-        serverLoads.put(zone, 0); // server load starts at 0
+        serverLoads.put(zone, 0); 
+        assignmentCounters.put(zone, 0);
         return zone;
     }
 
     
     public static void main(String[] args) {
-        // proxy binds itself in the registry so servers can find it and call registerServer()
         try {
-            int numberOfServers = 5;
             Registry registry = LocateRegistry.createRegistry(1099);
-            Proxy proxy = new Proxy(numberOfServers, registry);
+            Proxy proxy = new Proxy(registry);
             ProxyInterface stub = (ProxyInterface) UnicastRemoteObject.exportObject(proxy, 0);
             registry.rebind("Proxy", stub); // rebind instead of bind so we dont have to unbind "Proxy" every time we restart or redeploy (because of AlreadyBoundException)
             System.out.println("[Proxy] Proxy started and bound in registry as 'Proxy' on port 1099.");
         } catch (RemoteException e) {
             e.printStackTrace();
         }
-
-        // initialize all servers here?
-        // call registerServer N times (where N is amount of zones)
     }
 }

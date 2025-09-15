@@ -7,6 +7,8 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
@@ -17,6 +19,8 @@ public class Server implements ServerInterface{
     private int zone;
     private String bindingName;
     private final StatsService stats;
+
+    private final Queue<Object> queue = new LinkedList<>();
 
     public Server(
         String address, 
@@ -107,6 +111,8 @@ public class Server implements ServerInterface{
             return Integer.MAX_VALUE;
         }
     }
+
+    public int getCurrentLoad() { return queue.size(); }
 
     @Override
     public String toString() {

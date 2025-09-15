@@ -4,13 +4,35 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
+import com.ass1.server.ProxyInterface;
+import com.ass1.server.ServerConnection;
+import com.ass1.server.ServerInterface;
+
 
 public class Client {
     
+    public List<Query> queries = new ArrayList<>();
+    private ProxyInterface proxy = new ProxyInterface() {
+
+        @Override
+        public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) {
+            return proxy.registerServer(address, port, bindingName, serverStub);
+        }
+
+        @Override
+        public com.ass1.server.ServerConnection connectToServer(int zone) {
+            return proxy.connectToServer(zone);
+        }
+    };
+
     // Query class to store each parsed query
     public static class Query { 
         public String methodName;
@@ -29,39 +51,44 @@ public class Client {
         }
     }
     
-    public List<Query> queries = new ArrayList<>();
 
     public static void main(String[] args) {
-        // Overwrite (clear) output.txt at the start
-        try (FileWriter fw = new FileWriter("output.txt", false)) {
-            // false = overwrite mode
-            // Just open and close to clear the file
+        try (FileWriter fw = new FileWriter("output.txt", false)) { // false = overwrite mode
         } catch (IOException e) {
             e.printStackTrace();
         }
 
         Client client = new Client();
         client.parseInputFile();
-        System.out.println("Total queries: " + client.queries.size());
-        // lookup server from registry
-        /*
+        //System.out.println("Total queries: " + client.queries.size()); 
+        client.sendQueries();
+
         try {
             Registry registry = LocateRegistry.getRegistry();
             ServerInterface server = (ServerInterface) registry.lookup("server");
-        } catch (RemoteException | NotBoundException e) {
+        }   catch (RemoteException | NotBoundException e) {
             e.printStackTrace();
-        }
-        */
-        client.sendQueries();
+            }
     }
 
-    public void sendQueries() { //send queries to server with 10ms delay
+    public void sendQueries() {
         for (Query query : queries) {
-            writeToFile(query); //dummy values for times and serverZone
-            System.out.println("Sending query: " + query);
             try {
+                // 1. Connect to proxy to get ServerConnection for the query's zone
+                ServerConnection serverConn = proxy.connectToServer(query.zone);
+
+                // 2. Lookup the correct server in the registry using ServerConnection info
+                Registry registry = LocateRegistry.getRegistry(serverConn.getServerAddress(), serverConn.getServerPort());
+                ServerInterface server = (ServerInterface) registry.lookup(serverConn.getBindingName());
+
+                // 3. Send the query to the server and get the result
+                String result = server.executeQuery(query.methodName, query.args);
+
+                // 4. Write the result to output.txt
+                writeToFile(result);
+
                 Thread.sleep(10);
-            } catch (InterruptedException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }
@@ -109,11 +136,10 @@ public class Client {
             e.printStackTrace();
         }
     }
-    //Testing the filewriter, should be adjusted to write the results from the server invocation
-    public void writeToFile(Query query) {
-        String outputLine = query.toString() + System.lineSeparator();
-        try (FileWriter fw = new FileWriter("output.txt", true)) { // true for append mode
-            fw.write(outputLine);
+    // Helper method to write result to file
+    public void writeToFile(String result) {
+        try (FileWriter fw = new FileWriter("output.txt", true)) {
+            fw.write(result + System.lineSeparator());
         } catch (IOException e) {
             e.printStackTrace();
         }
