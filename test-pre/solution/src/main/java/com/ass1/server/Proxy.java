@@ -82,7 +82,8 @@ public class Proxy implements ProxyInterface {
         return conn;
     }
 
-    public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) {
+    public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) throws RemoteException {
+        // should server call proxy to register
         int zone = nextZone++;
         ServerConnection conn = new ServerConnection(address, port, zone, bindingName);
 
