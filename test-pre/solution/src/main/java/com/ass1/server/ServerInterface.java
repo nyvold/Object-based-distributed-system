@@ -1,7 +1,6 @@
 package com.ass1.server;
 
 import java.rmi.Remote;
-import java.rmi.RemoteException;
 
 public interface ServerInterface extends Remote{
     // should these methods throw remote exceptions?
