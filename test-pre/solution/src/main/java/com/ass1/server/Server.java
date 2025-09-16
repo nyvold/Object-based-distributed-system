@@ -7,6 +7,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
@@ -36,7 +37,7 @@ public class Server implements ServerInterface{
 
     public static void main(String[] args){
         try {
-            String address = "localhost";
+            String address = System.getenv().getOrDefault("PROXY_HOST", "localhost");
             int port = 0; // let RMI choose an ephemeral listening port for the remote object
             int zone = -1;
             String bindingName = "temp";
@@ -52,8 +53,9 @@ public class Server implements ServerInterface{
             server.zone = assignedZone;
             server.bindingName = assignedBindingName;
             System.out.println("[Server] Registered server in proxy: " + server.bindingName + " (zone " + server.zone + ", address " + server.address + ", port " + server.port + ")");
-            registry.rebind(assignedBindingName, serverStub);
-            System.out.println("[Server] " + server.toString() + " bound in registry");
+            // The proxy binds our stub into its local registry; remote rebinds from
+            // this container are disallowed by the registry (non-local host).
+            System.out.println("[Server] Awaiting client lookups via proxy binding: " + server.toString());
 
         } catch (RemoteException | NotBoundException e) {
             e.printStackTrace();
@@ -122,4 +124,95 @@ public class Server implements ServerInterface{
     public int getPort() { return port; }
     public int getZone() {return zone; }
     public String getBindingName() {return bindingName; }
+
+    // Execute a query described by method name and arguments.
+    // Returns the numeric result as a string.
+    @Override
+    public String executeQuery(String methodName, List<String> arguments) {
+        // reflect work in load queue
+        queue.add(new Object());
+        try {
+            switch (methodName) {
+                case "getPopulationofCountry": {
+                    if (arguments == null || arguments.isEmpty()) {
+                        return "0";
+                    }
+                    String country = String.join(" ", arguments);
+                    int res = getPopulationofCountry(country);
+                    return Integer.toString(res);
+                }
+                case "getNumberofCities": {
+                    if (arguments == null || arguments.size() < 3) {
+                        return "0";
+                    }
+                    String compToken = arguments.get(arguments.size() - 1);
+                    String thresholdToken = arguments.get(arguments.size() - 2);
+                    String country = String.join(" ", arguments.subList(0, arguments.size() - 2));
+
+                    int threshold;
+                    try { threshold = Integer.parseInt(thresholdToken); }
+                    catch (NumberFormatException nfe) { return "0"; }
+
+                    int compInt;
+                    if (compToken.equalsIgnoreCase("min")) compInt = 1;
+                    else if (compToken.equalsIgnoreCase("max")) compInt = -1;
+                    else {
+                        try { compInt = Integer.parseInt(compToken); }
+                        catch (NumberFormatException nfe) { compInt = 1; }
+                    }
+
+                    int res = getNumberofCities(country, threshold, compInt);
+                    return Integer.toString(res);
+                }
+                case "getNumberofCountries": {
+                    if (arguments == null || arguments.size() < 3) {
+                        return "0";
+                    }
+                    String cityCountToken = arguments.get(0);
+                    String thresholdToken = arguments.get(1);
+                    String compToken = arguments.get(2);
+
+                    int cityCount, threshold;
+                    try {
+                        cityCount = Integer.parseInt(cityCountToken);
+                        threshold = Integer.parseInt(thresholdToken);
+                    } catch (NumberFormatException nfe) {
+                        return "0";
+                    }
+
+                    int compInt;
+                    if (compToken.equalsIgnoreCase("min")) compInt = 1;
+                    else if (compToken.equalsIgnoreCase("max")) compInt = -1;
+                    else {
+                        try { compInt = Integer.parseInt(compToken); }
+                        catch (NumberFormatException nfe) { compInt = 1; }
+                    }
+
+                    int res = getNumberofCountries(cityCount, threshold, compInt);
+                    return Integer.toString(res);
+                }
+                case "getNumberofCountriesMM": {
+                    if (arguments == null || arguments.size() < 3) {
+                        return "0";
+                    }
+                    try {
+                        int cityCount = Integer.parseInt(arguments.get(0));
+                        int minPop = Integer.parseInt(arguments.get(1));
+                        int maxPop = Integer.parseInt(arguments.get(2));
+                        int res = getNumberofCountriesMM(cityCount, minPop, maxPop);
+                        return Integer.toString(res);
+                    } catch (NumberFormatException nfe) {
+                        return "0";
+                    }
+                }
+                case "getCurrentLoad": {
+                    return Integer.toString(getCurrentLoad());
+                }
+                default:
+                    return "0";
+            }
+        } finally {
+            queue.poll();
+        }
+    }
 }

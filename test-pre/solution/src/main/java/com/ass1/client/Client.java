@@ -58,7 +58,8 @@ public class Client {
         for (Query query : queries) {
             try {
                 logger.info("Processing query: " + query);
-                Registry registry = LocateRegistry.getRegistry();
+                String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "proxy");
+                Registry registry = LocateRegistry.getRegistry(proxyHost, 1099);
                 ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
                 logger.info("Connected to proxy.");
 

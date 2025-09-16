@@ -1,0 +1,352 @@
+networks:
+  ass1net: {}
+
+services:
+  proxy:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: proxy
+    environment:
+      - JAVA_MAIN=com.ass1.server.Proxy
+      - PROXY_HOST=proxy
+      - JVM_OPTS=-Djava.rmi.server.hostname=proxy
+    ports:
+      - "1099:1099"
+    networks:
+      - ass1net
+
+  db1:
+    image: postgres:16
+    container_name: db1
+    env_file:
+      - infra/db/zone1/db.env
+    volumes:
+      - ./infra/db/zone1/init:/docker-entrypoint-initdb.d:ro
+      # Use a named volume to avoid host dotfiles (.DS_Store) breaking initdb
+      - db1-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    networks:
+      - ass1net
+
+  db2:
+    image: postgres:16
+    container_name: db2
+    env_file:
+      - infra/db/zone2/db.env
+    volumes:
+      - ./infra/db/zone2/init:/docker-entrypoint-initdb.d:ro
+      - db2-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    networks:
+      - ass1net
+
+  db3:
+    image: postgres:16
+    container_name: db3
+    env_file:
+      - infra/db/zone3/db.env
+    volumes:
+      - ./infra/db/zone3/init:/docker-entrypoint-initdb.d:ro
+      - db3-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    networks:
+      - ass1net
+
+  db4:
+    image: postgres:16
+    container_name: db4
+    env_file:
+      - infra/db/zone4/db.env
+    volumes:
+      - ./infra/db/zone4/init:/docker-entrypoint-initdb.d:ro
+      - db4-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    networks:
+      - ass1net
+
+  db5:
+    image: postgres:16
+    container_name: db5
+    env_file:
+      - infra/db/zone5/db.env
+    volumes:
+      - ./infra/db/zone5/init:/docker-entrypoint-initdb.d:ro
+      - db5-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    networks:
+      - ass1net
+
+  server1:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: server1
+    environment:
+      - JAVA_MAIN=com.ass1.server.Server
+      - PROXY_HOST=proxy
+      - JVM_OPTS=-Djava.rmi.server.hostname=server1
+      - DB_URL=jdbc:postgresql://db1:5432/ass1_zone1
+    env_file:
+      - infra/db/zone1/app.env
+    depends_on:
+      proxy:
+        condition: service_started
+      db1:
+        condition: service_healthy
+    networks:
+      - ass1net
+
+  seed1:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: seed1
+    environment:
+      - JAVA_MAIN=com.ass1.server.load.CSVLoaderMain
+      - JAVA_ARGS=/data/dataset.csv
+      - DB_URL=jdbc:postgresql://db1:5432/ass1_zone1
+      - DB_USER=postgres
+      - DB_PASS=postgres
+    env_file:
+      - infra/db/zone1/app.env
+    depends_on:
+      db1:
+        condition: service_healthy
+    networks:
+      - ass1net
+    volumes:
+      - ./Ass1-RMI/Ass1-RMI/exercise_1_dataset.csv:/data/dataset.csv:ro
+
+  server2:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: server2
+    environment:
+      - JAVA_MAIN=com.ass1.server.Server
+      - PROXY_HOST=proxy
+      - JVM_OPTS=-Djava.rmi.server.hostname=server2
+      - DB_URL=jdbc:postgresql://db2:5432/ass1_zone2
+    env_file:
+      - infra/db/zone2/app.env
+    depends_on:
+      proxy:
+        condition: service_started
+      db2:
+        condition: service_healthy
+    networks:
+      - ass1net
+
+  seed2:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: seed2
+    environment:
+      - JAVA_MAIN=com.ass1.server.load.CSVLoaderMain
+      - JAVA_ARGS=/data/dataset.csv
+      - DB_URL=jdbc:postgresql://db2:5432/ass1_zone2
+      - DB_USER=postgres
+      - DB_PASS=postgres
+    env_file:
+      - infra/db/zone2/app.env
+    depends_on:
+      db2:
+        condition: service_healthy
+    networks:
+      - ass1net
+    volumes:
+      - ./Ass1-RMI/Ass1-RMI/exercise_1_dataset.csv:/data/dataset.csv:ro
+
+  server3:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: server3
+    environment:
+      - JAVA_MAIN=com.ass1.server.Server
+      - PROXY_HOST=proxy
+      - JVM_OPTS=-Djava.rmi.server.hostname=server3
+      - DB_URL=jdbc:postgresql://db3:5432/ass1_zone3
+    env_file:
+      - infra/db/zone3/app.env
+    depends_on:
+      proxy:
+        condition: service_started
+      db3:
+        condition: service_healthy
+    networks:
+      - ass1net
+
+  seed3:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: seed3
+    environment:
+      - JAVA_MAIN=com.ass1.server.load.CSVLoaderMain
+      - JAVA_ARGS=/data/dataset.csv
+      - DB_URL=jdbc:postgresql://db3:5432/ass1_zone3
+      - DB_USER=postgres
+      - DB_PASS=postgres
+    env_file:
+      - infra/db/zone3/app.env
+    depends_on:
+      db3:
+        condition: service_healthy
+    networks:
+      - ass1net
+    volumes:
+      - ./Ass1-RMI/Ass1-RMI/exercise_1_dataset.csv:/data/dataset.csv:ro
+
+  server4:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: server4
+    environment:
+      - JAVA_MAIN=com.ass1.server.Server
+      - PROXY_HOST=proxy
+      - JVM_OPTS=-Djava.rmi.server.hostname=server4
+      - DB_URL=jdbc:postgresql://db4:5432/ass1_zone4
+    env_file:
+      - infra/db/zone4/app.env
+    depends_on:
+      proxy:
+        condition: service_started
+      db4:
+        condition: service_healthy
+    networks:
+      - ass1net
+
+  seed4:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: seed4
+    environment:
+      - JAVA_MAIN=com.ass1.server.load.CSVLoaderMain
+      - JAVA_ARGS=/data/dataset.csv
+      - DB_URL=jdbc:postgresql://db4:5432/ass1_zone4
+      - DB_USER=postgres
+      - DB_PASS=postgres
+    env_file:
+      - infra/db/zone4/app.env
+    depends_on:
+      db4:
+        condition: service_healthy
+    networks:
+      - ass1net
+    volumes:
+      - ./Ass1-RMI/Ass1-RMI/exercise_1_dataset.csv:/data/dataset.csv:ro
+
+  server5:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: server5
+    environment:
+      - JAVA_MAIN=com.ass1.server.Server
+      - PROXY_HOST=proxy
+      - JVM_OPTS=-Djava.rmi.server.hostname=server5
+      - DB_URL=jdbc:postgresql://db5:5432/ass1_zone5
+    env_file:
+      - infra/db/zone5/app.env
+    depends_on:
+      proxy:
+        condition: service_started
+      db5:
+        condition: service_healthy
+    networks:
+      - ass1net
+
+  seed5:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: seed5
+    environment:
+      - JAVA_MAIN=com.ass1.server.load.CSVLoaderMain
+      - JAVA_ARGS=/data/dataset.csv
+      - DB_URL=jdbc:postgresql://db5:5432/ass1_zone5
+      - DB_USER=postgres
+      - DB_PASS=postgres
+    env_file:
+      - infra/db/zone5/app.env
+    depends_on:
+      db5:
+        condition: service_healthy
+    networks:
+      - ass1net
+    volumes:
+      - ./Ass1-RMI/Ass1-RMI/exercise_1_dataset.csv:/data/dataset.csv:ro
+  client:
+    build:
+      context: test-pre/solution
+      dockerfile: Dockerfile
+    container_name: client
+    environment:
+      - JAVA_MAIN=com.ass1.client.Client
+      - PROXY_HOST=proxy
+      - JVM_OPTS=-Djava.rmi.server.hostname=client
+    depends_on:
+      proxy:
+        condition: service_started
+      server1:
+        condition: service_started
+      server2:
+        condition: service_started
+      server3:
+        condition: service_started
+      server4:
+        condition: service_started
+      server5:
+        condition: service_started
+      seed1:
+        condition: service_completed_successfully
+      seed2:
+        condition: service_completed_successfully
+      seed3:
+        condition: service_completed_successfully
+      seed4:
+        condition: service_completed_successfully
+      seed5:
+        condition: service_completed_successfully
+    networks:
+      - ass1net
+    volumes:
+      - ./Ass1-RMI/Ass1-RMI/exercise_1_input.txt:/app/exercise_1_input.txt:ro
+      - ./client-output.txt:/app/output.txt
+
+volumes:
+  db1-data: {}
+  db2-data: {}
+  db3-data: {}
+  db4-data: {}
+  db5-data: {}

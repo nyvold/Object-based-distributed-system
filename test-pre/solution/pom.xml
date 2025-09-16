@@ -12,7 +12,7 @@
         <maven.compiler.target>17</maven.compiler.target>
     </properties>
 
-    <dependencies>
+  <dependencies>
         <dependency>
             <groupId>com.zaxxer</groupId>
             <artifactId>HikariCP</artifactId>
@@ -23,6 +23,54 @@
             <artifactId>postgresql</artifactId>
             <version>42.7.3</version>
         </dependency>
-    </dependencies>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Run main classes with: mvn -q -DskipTests exec:java -Dexec.mainClass=... -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.1.0</version>
+        <configuration>
+          <!-- Do not try to forcibly stop daemon threads (RMI + pools) -->
+          <cleanupDaemonThreads>false</cleanupDaemonThreads>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <!-- Optional: build a fat jar when the 'shade' profile is activated -->
+  <profiles>
+    <profile>
+      <id>shade</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <phase>package</phase>
+                <goals>
+                  <goal>shade</goal>
+                </goals>
+                <configuration>
+                  <createDependencyReducedPom>false</createDependencyReducedPom>
+                  <!-- Set one of these main classes before packaging, or override via -DmainClass=... -->
+                  <transformers>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                      <mainClass>${mainClass}</mainClass>
+                    </transformer>
+                  </transformers>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 
 </project>
