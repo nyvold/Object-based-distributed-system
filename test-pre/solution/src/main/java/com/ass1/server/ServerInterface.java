@@ -10,5 +10,4 @@ public interface ServerInterface extends Remote{
     int getNumberofCountries(int cityCount, int threshold, int comp) throws RemoteException;
     int getNumberofCountriesMM(int cityCount, int minPopulation, int maxPopulation) throws RemoteException;
     int getCurrentLoad() throws RemoteException;
-    String executeQuery(String methodName, List<String> arguments) throws RemoteException;
 }
