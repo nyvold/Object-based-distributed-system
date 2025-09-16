@@ -7,11 +7,6 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.ass1.client.Client.Query;
-
-import java.rmi.AlreadyBoundException;
-import java.rmi.NotBoundException;
-
 public class Proxy implements ProxyInterface {
 
     // Proxy composition: Proxy, Refresher, LoadBalancer
