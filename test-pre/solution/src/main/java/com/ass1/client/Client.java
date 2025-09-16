@@ -4,34 +4,22 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.rmi.NotBoundException;
-import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import com.ass1.server.ProxyInterface;
 import com.ass1.server.ServerConnection;
 import com.ass1.server.ServerInterface;
 
-
 public class Client {
-    
+
+    private static final Logger logger = Logger.getLogger(Client.class.getName());
     public List<Query> queries = new ArrayList<>();
-    private ProxyInterface proxy = new ProxyInterface() {
-
-        @Override
-        public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) {
-            return proxy.registerServer(address, port, bindingName, serverStub);
-        }
-
-        @Override
-        public com.ass1.server.ServerConnection connectToServer(int zone) {
-            return proxy.connectToServer(zone);
-        }
-    };
 
     // Query class to store each parsed query
     public static class Query { 
@@ -50,46 +38,71 @@ public class Client {
             return methodName + " " + String.join(" ", args) + " Zone:" + zone;
         }
     }
-    
 
     public static void main(String[] args) {
-        try (FileWriter fw = new FileWriter("output.txt", false)) { // false = overwrite mode
+        logger.info("Starting client...");
+        try (FileWriter fw = new FileWriter("output.txt", false)) {
+            logger.info("Cleared output.txt");
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.log(Level.SEVERE, "Failed to clear output.txt", e);
         }
 
         Client client = new Client();
         client.parseInputFile();
-        //System.out.println("Total queries: " + client.queries.size()); 
+        logger.info("Parsed " + client.queries.size() + " queries from input file.");
         client.sendQueries();
-
-        try {
-            Registry registry = LocateRegistry.getRegistry();
-            ServerInterface server = (ServerInterface) registry.lookup("server");
-        }   catch (RemoteException | NotBoundException e) {
-            e.printStackTrace();
-            }
+        logger.info("Finished sending all queries.");
     }
 
     public void sendQueries() {
         for (Query query : queries) {
             try {
-                // 1. Connect to proxy to get ServerConnection for the query's zone
+                logger.info("Processing query: " + query);
+                Registry registry = LocateRegistry.getRegistry();
+                ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
+                logger.info("Connected to proxy.");
+
                 ServerConnection serverConn = proxy.connectToServer(query.zone);
+                logger.info("Proxy assigned server: " + serverConn.getBindingName() + " at " + serverConn.getServerAddress() + ":" + serverConn.getServerPort());
 
-                // 2. Lookup the correct server in the registry using ServerConnection info
-                Registry registry = LocateRegistry.getRegistry(serverConn.getServerAddress(), serverConn.getServerPort());
+                registry = LocateRegistry.getRegistry(serverConn.getServerAddress(), serverConn.getServerPort());
                 ServerInterface server = (ServerInterface) registry.lookup(serverConn.getBindingName());
+                logger.info("Connected to server: " + serverConn.getBindingName());
 
-                // 3. Send the query to the server and get the result
-                String result = server.executeQuery(query.methodName, query.args);
-
-                // 4. Write the result to output.txt
-                writeToFile(result);
-
+                String result;
+                if(query.methodName.equals("getPopulationofCountry") && query.args.size() == 1) {
+                    String countryName = query.args.get(0);
+                    result = "Population of " + countryName + ": " + server.getPopulationofCountry(countryName);
+                    writeToFile(result);
+                } else if (query.methodName.equals("getNumberofCities") && query.args.size() == 3) {
+                    String countryName = query.args.get(0);
+                    int threshold = Integer.parseInt(query.args.get(1));
+                    int comparison = Integer.parseInt(query.args.get(2));
+                    String compStr = (comparison == 1) ? ">" : (comparison == 2) ? "<" : "=";
+                    result = "Number of cities in " + countryName + " with population " + compStr + " " + threshold + ": " + server.getNumberofCities(countryName, threshold, comparison);
+                    writeToFile(result);
+                } else if (query.methodName.equals("getNumberofCountries") && query.args.size() == 3) {
+                    int cityCount = Integer.parseInt(query.args.get(0));
+                    int threshold = Integer.parseInt(query.args.get(1));
+                    int comparison = Integer.parseInt(query.args.get(2));
+                    String compStr = (comparison == 1) ? ">" : (comparison == 2) ? "<" : "=";
+                    result = "Number of countries with number of cities " + compStr + " " + threshold + ": " + server.getNumberofCountries(cityCount, threshold, comparison);
+                    writeToFile(result);
+                } else if (query.methodName.equals("getNumberofCountriesMM") && query.args.size() == 3) {
+                    int cityCount = Integer.parseInt(query.args.get(0));
+                    int minPopulation = Integer.parseInt(query.args.get(1));
+                    int maxPopulation = Integer.parseInt(query.args.get(2));
+                    result = "Number of countries with number of cities > " + cityCount + " and population between " + minPopulation + " and " + maxPopulation + ": " + server.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation);
+                    writeToFile(result);
+                } else {
+                    result = "Invalid query: " + query.toString();
+                    logger.warning(result);
+                    writeToFile(result);
+                }
+                logger.info("Wrote result to output.txt");
                 Thread.sleep(10);
             } catch (Exception e) {
-                e.printStackTrace();
+                logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
             }
         }
     }
@@ -103,9 +116,8 @@ public class Client {
                 String line = scanner.nextLine().trim();
                 if (line.isEmpty()) continue;
 
-                // Find the last "Zone:" part
                 int zoneIdx = line.lastIndexOf("Zone:");
-                if (zoneIdx == -1) continue; // skip malformed lines
+                if (zoneIdx == -1) continue;
 
                 String beforeZone = line.substring(0, zoneIdx).trim();
                 String zoneStr = line.substring(zoneIdx + 5).trim();
@@ -113,10 +125,10 @@ public class Client {
                 try {
                     zone = Integer.parseInt(zoneStr);
                 } catch (NumberFormatException e) {
-                    continue; // skip malformed lines
+                    logger.warning("Invalid zone in line: " + line);
+                    continue;
                 }
 
-                // Split beforeZone into methodName and args
                 Scanner lineScanner = new Scanner(beforeZone);
                 if (!lineScanner.hasNext()) {
                     lineScanner.close();
@@ -133,15 +145,15 @@ public class Client {
             }
             scanner.close();
         } catch (FileNotFoundException e) {
-            e.printStackTrace();
+            logger.log(Level.SEVERE, "Input file not found: exercise_1_input.txt", e);
         }
     }
-    // Helper method to write result to file
+
     public void writeToFile(String result) {
         try (FileWriter fw = new FileWriter("output.txt", true)) {
             fw.write(result + System.lineSeparator());
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.log(Level.SEVERE, "Failed to write to output.txt", e);
         }
     }
 }
