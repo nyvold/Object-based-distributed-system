@@ -79,13 +79,11 @@ public class Client {
                         String countryName = query.args.get(0);
                         int threshold = Integer.parseInt(query.args.get(1));
                         int comparison = Integer.parseInt(query.args.get(2));
-                        String compStr = (comparison == 1) ? ">" : (comparison == 2) ? "<" : "=";
                         result = server.getNumberofCities(countryName, threshold, comparison) + " ";
                     } else if (query.methodName.equals("getNumberofCountries") && query.args.size() == 3) {
                         int cityCount = Integer.parseInt(query.args.get(0));
                         int threshold = Integer.parseInt(query.args.get(1));
                         int comparison = Integer.parseInt(query.args.get(2));
-                        String compStr = (comparison == 1) ? ">" : (comparison == 2) ? "<" : "=";
                         result = server.getNumberofCountries(cityCount, threshold, comparison) + " ";
                     } else if (query.methodName.equals("getNumberofCountriesMM") && query.args.size() == 3) {
                         int cityCount = Integer.parseInt(query.args.get(0));
