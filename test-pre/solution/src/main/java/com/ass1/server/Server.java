@@ -7,6 +7,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
@@ -36,7 +37,7 @@ public class Server implements ServerInterface{
 
     public static void main(String[] args){
         try {
-            String address = "localhost";
+            String address = System.getenv().getOrDefault("PROXY_HOST", "localhost");
             int port = 0; // let RMI choose an ephemeral listening port for the remote object
             int zone = -1;
             String bindingName = "temp";
@@ -52,8 +53,9 @@ public class Server implements ServerInterface{
             server.zone = assignedZone;
             server.bindingName = assignedBindingName;
             System.out.println("[Server] Registered server in proxy: " + server.bindingName + " (zone " + server.zone + ", address " + server.address + ", port " + server.port + ")");
-            registry.rebind(assignedBindingName, serverStub);
-            System.out.println("[Server] " + server.toString() + " bound in registry");
+            // The proxy binds our stub into its local registry; remote rebinds from
+            // this container are disallowed by the registry (non-local host).
+            System.out.println("[Server] Awaiting client lookups via proxy binding: " + server.toString());
 
         } catch (RemoteException | NotBoundException e) {
             e.printStackTrace();

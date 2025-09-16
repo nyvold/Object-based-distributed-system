@@ -1,6 +1,9 @@
 package com.ass1.server;
 
-public class ServerConnection {
+import java.io.Serializable;
+
+public class ServerConnection implements Serializable {
+    private static final long serialVersionUID = 1L;
     /*
      * ServerConnection object is given to the client, 
      * client looks up server i java RMI registry with adress, port and name.

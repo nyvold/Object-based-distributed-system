@@ -62,7 +62,7 @@ public class Proxy implements ProxyInterface {
         this.refresher = new Refresher(registry, serverLoads);
     }
 
-    public ServerConnection connectToServer(int zone) {
+    public ServerConnection connectToServer(int zone) throws RemoteException {
         int bestZone = balancer.selectBestServerForZone(zone);
         ServerConnection conn = serverConnections.get(bestZone);
 
@@ -80,12 +80,23 @@ public class Proxy implements ProxyInterface {
     public int registerServer(String address, int port, String bindingName, ServerInterface serverStub) throws RemoteException {
         // should server call proxy to register
         int zone = nextZone++;
-        ServerConnection conn = new ServerConnection(address, port, zone, bindingName);
+        // In our architecture, servers bind into this proxy's registry.
+        // Return connections that point clients to the proxy registry (1099)
+        String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "localhost");
+        String assignedBindingName = "server_zone_" + zone;
+
+        ServerConnection conn = new ServerConnection(proxyHost, 1099, zone, assignedBindingName);
 
         serverConnections.put(zone, conn);
         serverStubs.put(zone, serverStub);
         serverLoads.put(zone, 0); 
         assignmentCounters.put(zone, 0);
+
+        // Bind the server's stub into this (local) registry so clients can look it up.
+        // Doing it here avoids remote containers attempting to rebind, which the
+        // RMI registry disallows ("origin is non-local host").
+        registry.rebind(assignedBindingName, serverStub);
+        System.out.println("[Proxy] Bound server for zone " + zone + " as '" + assignedBindingName + "' in local registry");
         return zone;
     }
 

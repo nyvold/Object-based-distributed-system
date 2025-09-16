@@ -31,3 +31,5 @@ ds_store
 # Ignore local Postgres data directories if bind-mounted
 infra/db/*/data/*
 
+client-output.txt
+exercise_1_input.txt

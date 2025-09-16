@@ -12,22 +12,30 @@ public final class CSVLoader {
 
     public CSVLoader(DataSource ds) { this.ds = ds; }
 
-    // Assumes CSV columns: geoname_id,name,country_code,country_name,population,timezone,lat,lon
+    // Supports two formats:
+    // 1) Comma-separated: geoname_id,name,country_code,country_name,population,timezone,lat,lon
+    // 2) Semicolon-separated (assignment dataset): Geoname ID;Name;Country Code;Country name EN;Population;Timezone;Coordinates(lat,lon)
     public void load(File csv) throws Exception {
         List<String[]> rows;
         try (BufferedReader br = new BufferedReader(new FileReader(csv))) {
             rows = br.lines()
                      .skip(1) // header
-                     .map(line -> line.split(",", -1))
+                     .map(CSVLoader::parseLine)
+                     .filter(arr -> arr != null && arr.length == 8)
                      .collect(Collectors.toList());
         }
+
+        // Ensure the app user can read tables (when running as superuser)
+        ensureReadPrivileges();
 
         // Insert countries (dedup)
         Map<String,String> countries = new HashMap<>();
         for (String[] r : rows) {
             String code = r[2].trim();
             String name = r[3].trim();
-            if (!code.isEmpty() && !name.isEmpty()) countries.put(code, name);
+            if (code.isEmpty()) continue;
+            if (name.isEmpty()) name = code; // fallback for entries like XK with missing name
+            countries.put(code, name);
         }
 
         try (Connection c = ds.getConnection()) {
@@ -60,6 +68,49 @@ public final class CSVLoader {
                 up.executeBatch();
             }
             c.commit();
+        }
+    }
+
+    private void ensureReadPrivileges() {
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            c.setAutoCommit(true);
+            // These will succeed if connected as a superuser/owner, and no-op otherwise
+            st.execute("GRANT SELECT ON ALL TABLES IN SCHEMA public TO ass1");
+            st.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ass1");
+            st.execute("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO ass1");
+        } catch (SQLException ignore) {
+            // If we don't have privilege to grant, ignore silently
+        }
+    }
+
+    private static String[] parseLine(String line) {
+        if (line == null || line.isEmpty()) return null;
+        // Prefer semicolon if present (assignment dataset)
+        if (line.indexOf(';') >= 0) {
+            String[] parts = line.split(";", -1);
+            if (parts.length < 7) return null;
+            String coords = parts[6];
+            String lat = "";
+            String lon = "";
+            if (coords != null && !coords.isEmpty()) {
+                String[] ll = coords.split(",", -1);
+                if (ll.length >= 2) { lat = ll[0].trim(); lon = ll[1].trim(); }
+            }
+            return new String[] {
+                parts[0].trim(),            // geoname_id
+                parts[1].trim(),            // name
+                parts[2].trim(),            // country_code
+                parts[3].trim(),            // country_name
+                parts[4].trim(),            // population
+                parts[5].trim(),            // timezone
+                lat,
+                lon
+            };
+        } else {
+            // Assume comma-separated with expected 8 columns
+            String[] parts = line.split(",", -1);
+            if (parts.length < 8) return null;
+            return parts;
         }
     }
 

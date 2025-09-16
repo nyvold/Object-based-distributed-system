@@ -12,6 +12,8 @@ public final class DataSourceFactory {
         cfg.setUsername(System.getenv().getOrDefault("DB_USER", "ass1"));
         cfg.setPassword(System.getenv().getOrDefault("DB_PASS", "ass1"));
         cfg.setMaximumPoolSize(8);
+        // Avoid failing fast during container orchestration; allow DB to come up
+        cfg.setInitializationFailTimeout(-1);
         return new HikariDataSource(cfg);
     }
 }

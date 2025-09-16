@@ -9,6 +9,8 @@ import javax.sql.DataSource;
 public final class ServerBootstrap {
     public static StatsService initStatsService() {
         DataSource ds = DataSourceFactory.fromEnv();
+        // Ensure schema exists even if DB volume was pre-initialized without it
+        DbSchemaEnsurer.ensure(ds);
         CityRepository cityRepo = new CityRepository(ds);
         return new StatsService(cityRepo);
     }
