@@ -50,61 +50,61 @@ public class Client {
         Client client = new Client();
         client.parseInputFile();
         logger.info("Parsed " + client.queries.size() + " queries from input file.");
-        client.sendQueries();
+        client.sendQueries(10);
         logger.info("Finished sending all queries.");
     }
 
-    public void sendQueries() {
-        for (Query query : queries) {
-            try {
-                logger.info("Processing query: " + query);
-                String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "proxy");
-                Registry registry = LocateRegistry.getRegistry(proxyHost, 1099);
-                ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
-                logger.info("Connected to proxy.");
+    public void sendQueries(int delay) {
+        try (FileWriter fw = new FileWriter("output.txt", true)) { // Append mode
+            for (Query query : queries) {
+                try {
+                    logger.info("Processing query: " + query);
+                    String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "proxy");
+                    Registry registry = LocateRegistry.getRegistry(proxyHost, 1099);
+                    ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
+                    logger.info("Connected to proxy.");
 
-                ServerConnection serverConn = proxy.connectToServer(query.zone);
-                logger.info("Proxy assigned server: " + serverConn.getBindingName() + " at " + serverConn.getServerAddress() + ":" + serverConn.getServerPort());
+                    ServerConnection serverConn = proxy.connectToServer(query.zone);
+                    logger.info("Proxy assigned server: " + serverConn.getBindingName() + " at " + serverConn.getServerAddress() + ":" + serverConn.getServerPort());
 
-                registry = LocateRegistry.getRegistry(serverConn.getServerAddress(), serverConn.getServerPort());
-                ServerInterface server = (ServerInterface) registry.lookup(serverConn.getBindingName());
-                logger.info("Connected to server: " + serverConn.getBindingName());
+                    registry = LocateRegistry.getRegistry(serverConn.getServerAddress(), serverConn.getServerPort());
+                    ServerInterface server = (ServerInterface) registry.lookup(serverConn.getBindingName());
+                    logger.info("Connected to server: " + serverConn.getBindingName());
 
-                String result;
-                if(query.methodName.equals("getPopulationofCountry") && query.args.size() == 1) {
-                    String countryName = query.args.get(0);
-                    result = "Population of " + countryName + ": " + server.getPopulationofCountry(countryName);
-                    writeToFile(result);
-                } else if (query.methodName.equals("getNumberofCities") && query.args.size() == 3) {
-                    String countryName = query.args.get(0);
-                    int threshold = Integer.parseInt(query.args.get(1));
-                    int comparison = Integer.parseInt(query.args.get(2));
-                    String compStr = (comparison == 1) ? ">" : (comparison == 2) ? "<" : "=";
-                    result = "Number of cities in " + countryName + " with population " + compStr + " " + threshold + ": " + server.getNumberofCities(countryName, threshold, comparison);
-                    writeToFile(result);
-                } else if (query.methodName.equals("getNumberofCountries") && query.args.size() == 3) {
-                    int cityCount = Integer.parseInt(query.args.get(0));
-                    int threshold = Integer.parseInt(query.args.get(1));
-                    int comparison = Integer.parseInt(query.args.get(2));
-                    String compStr = (comparison == 1) ? ">" : (comparison == 2) ? "<" : "=";
-                    result = "Number of countries with number of cities " + compStr + " " + threshold + ": " + server.getNumberofCountries(cityCount, threshold, comparison);
-                    writeToFile(result);
-                } else if (query.methodName.equals("getNumberofCountriesMM") && query.args.size() == 3) {
-                    int cityCount = Integer.parseInt(query.args.get(0));
-                    int minPopulation = Integer.parseInt(query.args.get(1));
-                    int maxPopulation = Integer.parseInt(query.args.get(2));
-                    result = "Number of countries with number of cities > " + cityCount + " and population between " + minPopulation + " and " + maxPopulation + ": " + server.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation);
-                    writeToFile(result);
-                } else {
-                    result = "Invalid query: " + query.toString();
-                    logger.warning(result);
-                    writeToFile(result);
+                    String result;
+                    if(query.methodName.equals("getPopulationofCountry") && query.args.size() == 1) {
+                        String countryName = query.args.get(0);
+                        result = server.getPopulationofCountry(countryName) + " ";
+                    } else if (query.methodName.equals("getNumberofCities") && query.args.size() == 3) {
+                        String countryName = query.args.get(0);
+                        int threshold = Integer.parseInt(query.args.get(1));
+                        int comparison = Integer.parseInt(query.args.get(2));
+                        String compStr = (comparison == 1) ? ">" : (comparison == 2) ? "<" : "=";
+                        result = server.getNumberofCities(countryName, threshold, comparison) + " ";
+                    } else if (query.methodName.equals("getNumberofCountries") && query.args.size() == 3) {
+                        int cityCount = Integer.parseInt(query.args.get(0));
+                        int threshold = Integer.parseInt(query.args.get(1));
+                        int comparison = Integer.parseInt(query.args.get(2));
+                        String compStr = (comparison == 1) ? ">" : (comparison == 2) ? "<" : "=";
+                        result = server.getNumberofCountries(cityCount, threshold, comparison) + " ";
+                    } else if (query.methodName.equals("getNumberofCountriesMM") && query.args.size() == 3) {
+                        int cityCount = Integer.parseInt(query.args.get(0));
+                        int minPopulation = Integer.parseInt(query.args.get(1));
+                        int maxPopulation = Integer.parseInt(query.args.get(2));
+                        result = server.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation) + " ";
+                    } else {
+                        result = "Invalid query: " + query.toString();
+                        logger.warning(result);
+                    }
+                    fw.write(result + query.toString() + " " + System.lineSeparator());
+                    logger.info("Wrote result to output.txt");
+                    Thread.sleep(delay);
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
                 }
-                logger.info("Wrote result to output.txt");
-                Thread.sleep(10);
-            } catch (Exception e) {
-                logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
             }
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, "Failed to write to output.txt", e);
         }
     }
 
@@ -136,25 +136,60 @@ public class Client {
                     continue;
                 }
                 String methodName = lineScanner.next();
-                List<String> args = new ArrayList<>();
-                while (lineScanner.hasNext()) {
-                    args.add(lineScanner.next());
-                }
+                String rest = lineScanner.hasNextLine() ? lineScanner.nextLine().trim() : "";
                 lineScanner.close();
+
+                List<String> args = new ArrayList<>();
+                switch (methodName) {
+                    case "getPopulationofCountry" -> {
+                        if (!rest.isEmpty()) {
+                            args.add(rest);
+                        }
+                    }
+
+                    case "getNumberofCities", "getNumberofCountries" -> {
+                        // expects: countryName/cityCount threshold comparison
+                        String[] parts = rest.split("\\s+");
+                        if (parts.length >= 3) {
+                            args.add(parts[0]);
+                            args.add(parts[1]);
+                            // Convert comparison string to int
+                            String compStr = parts[2];
+                            int compInt = "=".equals(compStr) ? 3 : (">".equals(compStr) ? 1 : ("<".equals(compStr) ? 2 : 0));
+                            if (compInt == 0) {
+                                logger.warning("Invalid comparison operator for " + methodName + ": " + line);
+                                continue;
+                            }
+                            args.add(String.valueOf(compInt));
+                        } else {
+                            logger.warning("Invalid argument count for " + methodName + ": " + line);
+                            continue;
+                        }
+                    }
+                    case "getNumberofCountriesMM" -> {
+                        // expects: cityCount minPopulation maxPopulation
+                        String[] mmParts = rest.split("\\s+");
+                        if (mmParts.length >= 3) {
+                            args.add(mmParts[0]);
+                            args.add(mmParts[1]);
+                            args.add(mmParts[2]);
+                        } else {
+                            logger.warning("Invalid argument count for " + methodName + ": " + line);
+                            continue;
+                        }
+                    }
+
+                    default -> {
+                        logger.warning("Unknown method: " + methodName);
+                        continue;
+                    }
+                }
 
                 queries.add(new Query(methodName, args, zone));
             }
             scanner.close();
         } catch (FileNotFoundException e) {
             logger.log(Level.SEVERE, "Input file not found: exercise_1_input.txt", e);
-        }
-    }
-
-    public void writeToFile(String result) {
-        try (FileWriter fw = new FileWriter("output.txt", true)) {
-            fw.write(result + System.lineSeparator());
-        } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to write to output.txt", e);
         }
     }
 }
