@@ -33,3 +33,4 @@ infra/db/*/data/*
 
 client-output.txt
 exercise_1_input.txt
+settings.json

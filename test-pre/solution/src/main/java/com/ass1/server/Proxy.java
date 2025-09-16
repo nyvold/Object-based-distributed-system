@@ -56,6 +56,8 @@ public class Proxy implements ProxyInterface {
     private Map<Integer, Integer> serverLoads = new HashMap<>(); // <zone, serverLoad>
     private Map<Integer, Integer> assignmentCounters = new HashMap<>(); // <zone, count>
 
+    public static final int PROXY_PORT = 1099;
+
     public Proxy(Registry registry) {
         this.registry = registry;
         this.balancer = new LoadBalancer(serverStubs, serverLoads);
@@ -85,7 +87,7 @@ public class Proxy implements ProxyInterface {
         String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "localhost");
         String assignedBindingName = "server_zone_" + zone;
 
-        ServerConnection conn = new ServerConnection(proxyHost, 1099, zone, assignedBindingName);
+        ServerConnection conn = new ServerConnection(proxyHost, PROXY_PORT, zone, assignedBindingName);
 
         serverConnections.put(zone, conn);
         serverStubs.put(zone, serverStub);
@@ -103,7 +105,7 @@ public class Proxy implements ProxyInterface {
     
     public static void main(String[] args) {
         try {
-            Registry registry = LocateRegistry.createRegistry(1099);
+            Registry registry = LocateRegistry.createRegistry(PROXY_PORT);
             Proxy proxy = new Proxy(registry);
             ProxyInterface stub = (ProxyInterface) UnicastRemoteObject.exportObject(proxy, 0);
             registry.rebind("Proxy", stub); // rebind instead of bind so we dont have to unbind "Proxy" every time we restart or redeploy (because of AlreadyBoundException)

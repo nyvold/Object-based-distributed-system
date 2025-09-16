@@ -45,7 +45,7 @@ public class Server implements ServerInterface{
             Server server = new Server(address, port, zone, bindingName);
             ServerInterface serverStub = (ServerInterface) UnicastRemoteObject.exportObject(server, port);
 
-            Registry registry = LocateRegistry.getRegistry(address, 1099);
+            Registry registry = LocateRegistry.getRegistry(address, Proxy.PROXY_PORT);
             ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
             int assignedZone = proxy.registerServer(address, port, bindingName, serverStub);
             String assignedBindingName = "server_zone_" + assignedZone;
