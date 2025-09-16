@@ -342,7 +342,6 @@ services:
       - ass1net
     volumes:
       - ./Ass1-RMI/Ass1-RMI/exercise_1_input.txt:/app/exercise_1_input.txt:ro
-      - ./client-output.txt:/app/output.txt
 
 volumes:
   db1-data: {}
