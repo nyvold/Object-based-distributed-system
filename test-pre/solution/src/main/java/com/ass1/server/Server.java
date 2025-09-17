@@ -121,28 +121,46 @@ public class Server implements ServerInterface{
     }
 
     @Override
-    public int getNumberofCountries(int cityCount, int threshold, int comp) {
-        String comparison = comp <= 0 ? "max" : "min";
+    public int getNumberofCountries(int cityCount, int threshold, int comp) throws RemoteException {
+        FutureTask<Integer> assignment = new FutureTask<>(() -> {
+            String comparison = comp <= 0 ? "max" : "min";
+            try {
+                long val = stats.getNumberofCountries(cityCount, threshold, comparison);
+                return Math.toIntExact(val);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            } catch (ArithmeticException ae) {
+                return Integer.MAX_VALUE;
+            }
+        });
+        queue.add(assignment);
         try {
-            long val = stats.getNumberofCountries(cityCount, threshold, comparison);
-            return Math.toIntExact(val);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        } catch (ArithmeticException ae) {
-            return Integer.MAX_VALUE;
+            return assignment.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RemoteException("Error processing request", e);
         }
+        
     }
 
     @Override
-    public int getNumberofCountriesMM(int cityCount, int minPopulation, int maxPopulation) {
+    public int getNumberofCountriesMM(int cityCount, int minPopulation, int maxPopulation) throws RemoteException {
+        FutureTask<Integer> assignment = new FutureTask<>(() -> {
+            try {
+                long val = stats.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation);
+                return Math.toIntExact(val);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            } catch (ArithmeticException ae) {
+                return Integer.MAX_VALUE;
+            }
+        });
+        queue.add(assignment);
         try {
-            long val = stats.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation);
-            return Math.toIntExact(val);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        } catch (ArithmeticException ae) {
-            return Integer.MAX_VALUE;
+            return assignment.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RemoteException("Error processing request", e);
         }
+        
     }
 
     public int getCurrentLoad() { return queue.size(); }
