@@ -6,9 +6,10 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
 
@@ -19,7 +20,7 @@ public class Server implements ServerInterface{
     private String bindingName;
     private final StatsService stats;
 
-    private final Queue<Object> queue = new LinkedList<>();
+    private final BlockingQueue<FutureTask<?>> queue = new LinkedBlockingQueue<>();
 
     public Server(
         String address, 
@@ -33,6 +34,20 @@ public class Server implements ServerInterface{
         this.bindingName = bindingName;
         // Initialize DB-backed services from environment
         this.stats = ServerBootstrap.initStatsService();
+
+        Thread worker = new Thread(() -> {
+            while (true) {
+                try {
+                    FutureTask<?> assignment = queue.take();
+                    assignment.run();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        });
+        worker.setDaemon(true);
+        worker.start();
     }
 
     public static void main(String[] args){
@@ -63,28 +78,46 @@ public class Server implements ServerInterface{
     }
 
     @Override
-    public int getPopulationofCountry(String countryName) {
+    public int getPopulationofCountry(String countryName) throws RemoteException {
+        FutureTask<Integer> assignment = new FutureTask<>(() -> {
+            try {
+                long val = stats.getPopulationofCountry(countryName);
+                return Math.toIntExact(val);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            } catch (ArithmeticException ae) {
+                return Integer.MAX_VALUE;
+            }
+        });
+        queue.add(assignment);
         try {
-            long val = stats.getPopulationofCountry(countryName);
-            return Math.toIntExact(val);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        } catch (ArithmeticException ae) {
-            return Integer.MAX_VALUE;
+            return assignment.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RemoteException("Error processing request", e);
         }
+        
     }
 
     @Override
-    public int getNumberofCities(String countryName, int threshold, int comparison) {
-        String comp = comparison <= 0 ? "max" : "min"; // simple mapping
+    public int getNumberofCities(String countryName, int threshold, int comparison) throws RemoteException {
+        FutureTask<Integer> assignment = new FutureTask<>(() -> {
+            String comp = comparison <= 0 ? "max" : "min"; // simple mapping
+            try {
+                long val = stats.getNumberofCities(countryName, threshold, comp);
+                return Math.toIntExact(val);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            } catch (ArithmeticException ae) {
+                return Integer.MAX_VALUE;
+            }
+        });
+        queue.add(assignment);
         try {
-            long val = stats.getNumberofCities(countryName, threshold, comp);
-            return Math.toIntExact(val);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        } catch (ArithmeticException ae) {
-            return Integer.MAX_VALUE;
+            return assignment.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RemoteException("Error processing request", e);
         }
+        
     }
 
     @Override
