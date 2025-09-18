@@ -11,6 +11,65 @@ Quick start
 - Follow logs:
   - `docker compose logs -f`
 
+Run via CLI
+- Start in foreground (build if needed):
+  - `docker compose up --build`
+- Start detached (in background):
+  - `docker compose up -d --build`
+- Tail logs for a specific service (e.g., client):
+  - `docker compose logs -f client`
+- Rebuild and run only the client (faster iteration):
+  - `docker compose build client && docker compose up client`
+- Stop all services (keep volumes):
+  - `docker compose down`
+- Stop and remove volumes (fresh databases on next run):
+  - `docker compose down -v`
+
+- Run with NO CACHE
+  - `docker compose run --rm -e JAVA_ARGS="--client-cache=false --server-cache=false" client`
+
+- Run with SERVER cache
+  - `docker compose run --rm -e JAVA_ARGS="--client-cache=false --server-cache=true" client`
+
+- Run WITH CLIENT cachce
+  - `docker compose run --rm -e JAVA_ARGS="--client-cache=true --server-cache=false" client`
+
+
+CLI flags for cache (client/server)
+- Recognized flags inside the containers (passed via `JAVA_ARGS`):
+  - Client:
+    - `--client-cache[=true|false]`
+    - `--client-cache-cap=<N>` (default 45)
+  - Server:
+    - `--server-cache[=true|false]`
+    - `--server-cache-cap=<N>` (default 150)
+
+Quick ways to use flags
+- Edit docker-compose.yml (already configured):
+  - Servers have `JAVA_ARGS=--server-cache=true --server-cache-cap=150`.
+  - Client has `JAVA_ARGS=--client-cache=true --client-cache-cap=45`.
+- One-off client run with different flags (stack already running):
+  1. Start proxy + servers: `docker compose up -d proxy server1 server2 server3 server4 server5`
+  2. Run client once with flags: `docker compose run --rm -e JAVA_ARGS="--client-cache=true --client-cache-cap=45" client`
+     (Write output to `client-output/client_cache.txt`.)
+- Override file approach (toggle server cache without editing main compose):
+  - Create `docker-compose.override.yml` with only the flags you want to change, e.g.:
+    - `services:`
+    - `  server1:`
+    - `    environment:`
+    - `      - JAVA_ARGS=--server-cache=false`
+    - (repeat for `server2..server5` or use a YAML anchor)
+  - Run with both files: `docker compose -f docker-compose.yml -f docker-compose.override.yml up --build`
+
+Env var fallback (alternative to flags)
+- Client: `CLIENT_CACHE=true|false`, `CLIENT_CACHE_CAP=<N>`
+- Server: `SERVER_CACHE=true|false`, `SERVER_CACHE_CAP=<N>`
+
+Output filenames by mode
+- No cache: `client-output/naive_server.txt` and `metrics_naive_server.csv`
+- Client cache: `client-output/client_cache.txt` and `metrics_client_cache.csv`
+- Server cache: `client-output/server_cache.txt` and `metrics_server_cache.csv`
+
 What runs
 - 1 proxy (`proxy`) on RMI 1099
 - 5 servers (`server1..server5`) that register with the proxy
