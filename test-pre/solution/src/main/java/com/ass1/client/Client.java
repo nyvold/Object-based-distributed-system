@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
-// no concurrency imports needed in the sequential client
 import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -20,7 +19,6 @@ import com.ass1.server.Result;
 import com.ass1.server.ServerConnection;
 import com.ass1.server.ServerInterface;
 
-import com.ass1.server.Latency;
 
 public class Client {
     private static final Logger logger = Logger.getLogger(Client.class.getName());
@@ -85,7 +83,6 @@ public class Client {
             if (parent != null)
                 parent.mkdirs();
             try (FileWriter fw = new FileWriter(outFile, false)) {
-                // Human-readable header
                 fw.write(
                         "# Columns: result|ERROR method args Zone:N ServerZone:Z WaitMs ExecMs TurnMs TotalMs Cache [errorType]\\n");
                 logger.info("Cleared output and wrote header: " + outputPath);
@@ -107,7 +104,7 @@ public class Client {
         logger.info("Finished sending all queries.");
     }
 
-    // iterates through the queries list and executes each query
+    // iterates through the list of queries and executes them
     public void sendQueries() {
         String outputPath = selectOutputPath();
         String metricsPath = System.getenv().getOrDefault("METRICS_PATH", deriveMetricsPath(outputPath));
