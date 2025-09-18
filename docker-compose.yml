@@ -112,6 +112,7 @@ services:
       - PROXY_HOST=proxy
       - JVM_OPTS=-Djava.rmi.server.hostname=server1
       - DB_URL=jdbc:postgresql://db1:5432/ass1_zone1
+      - JAVA_ARGS=--server-cache=true --server-cache-cap=150
     env_file:
       - infra/db/zone1/app.env
     depends_on:
@@ -153,6 +154,7 @@ services:
       - PROXY_HOST=proxy
       - JVM_OPTS=-Djava.rmi.server.hostname=server2
       - DB_URL=jdbc:postgresql://db2:5432/ass1_zone2
+      - JAVA_ARGS=--server-cache=true --server-cache-cap=150
     env_file:
       - infra/db/zone2/app.env
     depends_on:
@@ -194,6 +196,7 @@ services:
       - PROXY_HOST=proxy
       - JVM_OPTS=-Djava.rmi.server.hostname=server3
       - DB_URL=jdbc:postgresql://db3:5432/ass1_zone3
+      - JAVA_ARGS=--server-cache=true --server-cache-cap=150
     env_file:
       - infra/db/zone3/app.env
     depends_on:
@@ -235,6 +238,7 @@ services:
       - PROXY_HOST=proxy
       - JVM_OPTS=-Djava.rmi.server.hostname=server4
       - DB_URL=jdbc:postgresql://db4:5432/ass1_zone4
+      - JAVA_ARGS=--server-cache=true --server-cache-cap=150
     env_file:
       - infra/db/zone4/app.env
     depends_on:
@@ -276,6 +280,7 @@ services:
       - PROXY_HOST=proxy
       - JVM_OPTS=-Djava.rmi.server.hostname=server5
       - DB_URL=jdbc:postgresql://db5:5432/ass1_zone5
+      - JAVA_ARGS=--server-cache=true --server-cache-cap=150
     env_file:
       - infra/db/zone5/app.env
     depends_on:
@@ -316,6 +321,8 @@ services:
       - PROXY_HOST=proxy
       - JVM_OPTS=-Djava.rmi.server.hostname=client
       - OUTPUT_PATH=/app/out/naive_server.txt
+      - INPUT_PATH=/app/exercise_1_input.txt
+      - JAVA_ARGS=--client-cache=true --client-cache-cap=45
     depends_on:
       proxy:
         condition: service_started

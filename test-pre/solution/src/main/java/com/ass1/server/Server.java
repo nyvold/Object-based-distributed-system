@@ -10,6 +10,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Collections;
 import java.util.concurrent.Callable;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
@@ -22,6 +25,14 @@ public class Server implements ServerInterface{
     private final StatsService stats;
 
     private final BlockingQueue<FutureTask<?>> queue = new LinkedBlockingQueue<>();
+    private static volatile boolean SERVER_CACHE_ENABLED = parseBoolEnv("SERVER_CACHE", false);
+    private static volatile int SERVER_CACHE_CAP = parseIntEnv("SERVER_CACHE_CAP", 150);
+    private final Map<String, Integer> cache = new LinkedHashMap<String, Integer>(128, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Integer> eldest) {
+            return size() > SERVER_CACHE_CAP;
+        }
+    };
     private static final int BASE_NETWORK_MS = 80; // base communication latency per assignment
     private static final int EXEC_DELAY_MS = parseIntEnv("SERVER_EXEC_DELAY_MS", 0); // optional simulated exec time
 
@@ -55,6 +66,19 @@ public class Server implements ServerInterface{
 
     public static void main(String[] args){
         try {
+            // Parse CLI flags: --server-cache[=true|false], --server-cache-cap=N
+            if (args != null) {
+                for (String a : args) {
+                    if (a == null) continue;
+                    if (a.startsWith("--server-cache-cap=")) {
+                        try { SERVER_CACHE_CAP = Integer.parseInt(a.substring(a.indexOf('=')+1).trim()); } catch (Exception ignore) {}
+                    } else if (a.equals("--server-cache") || a.equals("--server-cache=true")) {
+                        SERVER_CACHE_ENABLED = true;
+                    } else if (a.equals("--server-cache=false")) {
+                        SERVER_CACHE_ENABLED = false;
+                    }
+                }
+            }
             String address = System.getenv().getOrDefault("PROXY_HOST", "localhost");
             int port = 0; // let RMI choose an ephemeral listening port for the remote object
             int zone = -1;
@@ -71,6 +95,7 @@ public class Server implements ServerInterface{
             server.zone = assignedZone;
             server.bindingName = assignedBindingName;
             System.out.println("[Server] Registered server in proxy: " + server.bindingName + " (zone " + server.zone + ", address " + server.address + ", port " + server.port + ")");
+            System.out.println("[Server] Cache enabled=" + SERVER_CACHE_ENABLED + ", cap=" + SERVER_CACHE_CAP);
             // The proxy binds our stub into its local registry; remote rebinds from
             // this container are disallowed by the registry (non-local host).
             System.out.println("[Server] Awaiting client lookups via proxy binding: " + server.toString());
@@ -86,6 +111,11 @@ public class Server implements ServerInterface{
         TimedTask<Integer> assignment = new TimedTask<>(() -> {
             try {
                 maybeExecDelay();
+                String key = "getPopulationofCountry|" + countryName;
+                if (SERVER_CACHE_ENABLED) {
+                    Integer hit = cache.get(key);
+                    if (hit != null) return hit;
+                }
                 long val = stats.getPopulationofCountry(countryName);
                 return Math.toIntExact(val);
             } catch (SQLException e) {
@@ -97,6 +127,10 @@ public class Server implements ServerInterface{
         queue.add(assignment);
         try {
             int value = assignment.get();
+            if (SERVER_CACHE_ENABLED) {
+                String key = "getPopulationofCountry|" + countryName;
+                cache.put(key, value);
+            }
             return new Result(value, assignment.waitMs(), assignment.execMs());
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
@@ -111,6 +145,11 @@ public class Server implements ServerInterface{
             String comp = (comparison == 2) ? "max" : "min"; // 1=min (>=), 2=max (<=)
             try {
                 maybeExecDelay();
+                String key = "getNumberofCities|" + countryName + "|" + threshold + "|" + comparison;
+                if (SERVER_CACHE_ENABLED) {
+                    Integer hit = cache.get(key);
+                    if (hit != null) return hit;
+                }
                 long val = stats.getNumberofCities(countryName, threshold, comp);
                 return Math.toIntExact(val);
             } catch (SQLException e) {
@@ -122,6 +161,10 @@ public class Server implements ServerInterface{
         queue.add(assignment);
         try {
             int value = assignment.get();
+            if (SERVER_CACHE_ENABLED) {
+                String key = "getNumberofCities|" + countryName + "|" + threshold + "|" + comparison;
+                cache.put(key, value);
+            }
             return new Result(value, assignment.waitMs(), assignment.execMs());
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
@@ -136,6 +179,11 @@ public class Server implements ServerInterface{
             String comparison = (comp == 2) ? "max" : "min"; // 1=min (>=), 2=max (<=)
             try {
                 maybeExecDelay();
+                String key = "getNumberofCountries|" + cityCount + "|" + threshold + "|" + comp;
+                if (SERVER_CACHE_ENABLED) {
+                    Integer hit = cache.get(key);
+                    if (hit != null) return hit;
+                }
                 long val = stats.getNumberofCountries(cityCount, threshold, comparison);
                 return Math.toIntExact(val);
             } catch (SQLException e) {
@@ -147,6 +195,10 @@ public class Server implements ServerInterface{
         queue.add(assignment);
         try {
             int value = assignment.get();
+            if (SERVER_CACHE_ENABLED) {
+                String key = "getNumberofCountries|" + cityCount + "|" + threshold + "|" + comp;
+                cache.put(key, value);
+            }
             return new Result(value, assignment.waitMs(), assignment.execMs());
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
@@ -160,6 +212,11 @@ public class Server implements ServerInterface{
         TimedTask<Integer> assignment = new TimedTask<>(() -> {
             try {
                 maybeExecDelay();
+                String key = "getNumberofCountriesMM|" + cityCount + "|" + minPopulation + "|" + maxPopulation;
+                if (SERVER_CACHE_ENABLED) {
+                    Integer hit = cache.get(key);
+                    if (hit != null) return hit;
+                }
                 long val = stats.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation);
                 return Math.toIntExact(val);
             } catch (SQLException e) {
@@ -171,6 +228,10 @@ public class Server implements ServerInterface{
         queue.add(assignment);
         try {
             int value = assignment.get();
+            if (SERVER_CACHE_ENABLED) {
+                String key = "getNumberofCountriesMM|" + cityCount + "|" + minPopulation + "|" + maxPopulation;
+                cache.put(key, value);
+            }
             return new Result(value, assignment.waitMs(), assignment.execMs());
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
@@ -204,6 +265,15 @@ public class Server implements ServerInterface{
         String v = System.getenv(name);
         if (v == null) return def;
         try { return Integer.parseInt(v.trim()); } catch (NumberFormatException e) { return def; }
+    }
+    private static boolean parseBoolEnv(String name, boolean def) {
+        String v = System.getenv(name);
+        if (v == null) return def;
+        switch (v.trim().toLowerCase()) {
+            case "1": case "true": case "yes": case "on": return true;
+            case "0": case "false": case "no": case "off": return false;
+            default: return def;
+        }
     }
 
     private static final class TimedTask<V> extends FutureTask<V> {
