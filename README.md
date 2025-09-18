@@ -34,7 +34,7 @@ Health checks and verification
 - Check a DB has data (example zone1):
   - `docker exec -it db1 psql -U ass1 -d ass1_zone1 -c "select count(*) from city;"`
 - Inspect client output (mounted):
-  - `cat client-output.txt`
+  - `cat client-output/output.txt`
 
 Notes
 - If Docker cannot pull base images due to network/DNS, configure Docker Desktop DNS (for example `8.8.8.8`, `1.1.1.1`) or set proxy settings, then retry pulls:

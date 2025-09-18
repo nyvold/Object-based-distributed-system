@@ -41,10 +41,16 @@ public class Client {
 
     public static void main(String[] args) {
         logger.info("Starting client...");
-        try (FileWriter fw = new FileWriter("output.txt", false)) {
-            logger.info("Cleared output.txt");
+        String outputPath = System.getenv().getOrDefault("OUTPUT_PATH", "output.txt");
+        try {
+            File outFile = new File(outputPath);
+            File parent = outFile.getParentFile();
+            if (parent != null) parent.mkdirs();
+            try (FileWriter fw = new FileWriter(outFile, false)) {
+                logger.info("Cleared output: " + outputPath);
+            }
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to clear output.txt", e);
+            logger.log(Level.SEVERE, "Failed to clear output: " + outputPath, e);
         }
 
         Client client = new Client();
@@ -55,7 +61,8 @@ public class Client {
     }
 
     public void sendQueries(int delay) {
-        try (FileWriter fw = new FileWriter("output.txt", true)) { // Append mode
+        String outputPath = System.getenv().getOrDefault("OUTPUT_PATH", "output.txt");
+        try (FileWriter fw = new FileWriter(outputPath, true)) { // Append mode
             for (Query query : queries) {
                 try {
                     logger.info("Processing query: " + query);
@@ -95,14 +102,14 @@ public class Client {
                         logger.warning(result);
                     }
                     fw.write(result + query.toString() + " " + System.lineSeparator());
-                    logger.info("Wrote result to output.txt");
+                    logger.info("Wrote result to: " + outputPath);
                     Thread.sleep(delay);
                 } catch (Exception e) {
                     logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
                 }
             }
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to write to output.txt", e);
+            logger.log(Level.SEVERE, "Failed to write to output: " + outputPath, e);
         }
     }
 

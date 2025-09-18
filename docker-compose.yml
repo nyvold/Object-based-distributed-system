@@ -315,6 +315,7 @@ services:
       - JAVA_MAIN=com.ass1.client.Client
       - PROXY_HOST=proxy
       - JVM_OPTS=-Djava.rmi.server.hostname=client
+      - OUTPUT_PATH=/app/out/output.txt
     depends_on:
       proxy:
         condition: service_started
@@ -342,6 +343,8 @@ services:
       - ass1net
     volumes:
       - ./Ass1-RMI/Ass1-RMI/exercise_1_input.txt:/app/exercise_1_input.txt:ro
+      # Mirror the client's output directory to host for inspection (robust to non-existent files)
+      - ./client-output:/app/out
 
 volumes:
   db1-data: {}
