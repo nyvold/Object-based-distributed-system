@@ -14,9 +14,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.ass1.server.ProxyInterface;
+import com.ass1.server.Result;
 import com.ass1.server.ServerConnection;
 import com.ass1.server.ServerInterface;
-import com.ass1.server.Result;
 
 public class Client {
 
@@ -43,7 +43,7 @@ public class Client {
 
     public static void main(String[] args) {
         logger.info("Starting client...");
-        String outputPath = System.getenv().getOrDefault("OUTPUT_PATH", "output.txt");
+        String outputPath = System.getenv().getOrDefault("OUTPUT_PATH", "naive_server.txt");
         try {
             File outFile = new File(outputPath);
             File parent = outFile.getParentFile();
@@ -166,16 +166,133 @@ public class Client {
         logger.info("Client summary: processed=" + processed + ", successful=" + successful + ", failed=" + failed);
     }
 
-    // removed old concurrent helper due to merge; single-threaded flow retains timing in sendQueries()
-
-    private static int parseIntEnv(String name, int def) {
-        String v = System.getenv(name);
-        if (v == null) return def;
+    private Void processOne(Query query, String outputPath) {
+        long t0 = System.nanoTime();
+        int serverZone = -1;
+        long callStart = -1L;
         try {
-            return Integer.parseInt(v.trim());
-        } catch (NumberFormatException e) {
-            return def;
+            logger.info("Processing query: " + query);
+            String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "proxy");
+            Registry registry = LocateRegistry.getRegistry(proxyHost, 1099);
+            ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
+            logger.info("Connected to proxy.");
+
+            ServerConnection serverConn = proxy.connectToServer(query.zone);
+            
+            // Add null check for serverConn
+            if (serverConn == null) {
+                throw new RuntimeException("Proxy returned null ServerConnection for zone " + query.zone + 
+                                        ". No server available for this zone.");
+            }
+            
+            logger.info("Proxy assigned server: " + serverConn.getBindingName() + " at " + 
+                    serverConn.getServerAddress() + ":" + serverConn.getServerPort());
+            serverZone = serverConn.getZone();
+
+            registry = LocateRegistry.getRegistry(serverConn.getServerAddress(), serverConn.getServerPort());
+            ServerInterface server = (ServerInterface) registry.lookup(serverConn.getBindingName());
+            logger.info("Connected to server: " + serverConn.getBindingName());
+
+            // Simulate extra network latency for cross-zone communication (base 80ms added at server)
+            int zoneDiff = Math.abs(serverConn.getZone() - query.zone);
+            int extraMs = 30 * zoneDiff;
+            if (extraMs > 0) { 
+                try { 
+                    Thread.sleep(extraMs); 
+                } catch (InterruptedException ignored) { 
+                    Thread.currentThread().interrupt(); 
+                } 
+            }
+
+            callStart = System.nanoTime();
+            Result r;
+            if(query.methodName.equals("getPopulationofCountry") && query.args.size() == 1) {
+                String countryName = query.args.get(0);
+                r = server.getPopulationofCountry(countryName);
+            } else if (query.methodName.equals("getNumberofCities") && query.args.size() == 3) {
+                String countryName = query.args.get(0);
+                int threshold = Integer.parseInt(query.args.get(1));
+                int comparison = Integer.parseInt(query.args.get(2));
+                r = server.getNumberofCities(countryName, threshold, comparison);
+            } else if (query.methodName.equals("getNumberofCountries") && query.args.size() == 3) {
+                int cityCount = Integer.parseInt(query.args.get(0));
+                int threshold = Integer.parseInt(query.args.get(1));
+                int comparison = Integer.parseInt(query.args.get(2));
+                r = server.getNumberofCountries(cityCount, threshold, comparison);
+            } else if (query.methodName.equals("getNumberofCountriesMM") && query.args.size() == 3) {
+                int cityCount = Integer.parseInt(query.args.get(0));
+                int minPopulation = Integer.parseInt(query.args.get(1));
+                int maxPopulation = Integer.parseInt(query.args.get(2));
+                r = server.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation);
+            } else {
+                String invalid = "Invalid query: " + query.toString();
+                logger.warning(invalid);
+                long t1 = System.nanoTime();
+                long totalMs = (t1 - t0) / 1_000_000L;
+                String line = invalid + " ServerZone:" + serverZone + " TotalMs:" + totalMs + System.lineSeparator();
+                synchronized (OUTPUT_LOCK) { 
+                    try (FileWriter fw = new FileWriter(outputPath, true)) { 
+                        fw.write(line); 
+                    } catch (IOException ioEx) {
+                        logger.log(Level.SEVERE, "Failed to write invalid query result", ioEx);
+                    }
+                }
+                logger.info("Wrote result to: " + outputPath);
+                return null;
+            }
+            
+            // Add null check for result
+            if (r == null) {
+                throw new RuntimeException("Server returned null result for query: " + query.toString());
+            }
+            
+            long turnaroundMs = (System.nanoTime() - callStart) / 1_000_000L;
+            long t1 = System.nanoTime();
+            long totalMs = (t1 - t0) / 1_000_000L;
+            String line = (r.getValue() + " ") + query.toString() + " ServerZone:" + serverZone +
+                    " WaitMs:" + r.getWaitMs() + " ExecMs:" + r.getExecMs() +
+                    " TurnMs:" + turnaroundMs + " TotalMs:" + totalMs + System.lineSeparator();
+            synchronized (OUTPUT_LOCK) { 
+                try (FileWriter fw = new FileWriter(outputPath, true)) { 
+                    fw.write(line); 
+                } catch (IOException ioEx) {
+                    logger.log(Level.SEVERE, "Failed to write success result", ioEx);
+                }
+            }
+            logger.info("Wrote result to: " + outputPath);
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
+            long t1 = System.nanoTime();
+            long totalMs = (t1 - t0) / 1_000_000L;
+            Long turnMs = callStart > 0 ? (t1 - callStart) / 1_000_000L : null;
+            // Determine error type based on exception
+            String errorType;
+            if (e instanceof java.rmi.NotBoundException) {
+                errorType = "ServiceNotFound";
+            } else if (e instanceof java.rmi.ConnectException) {
+                errorType = "ConnectionFailed";
+            } else if (e instanceof java.net.UnknownHostException) {
+                errorType = "HostNotFound";
+            } else if (e instanceof RuntimeException && e.getMessage().contains("null ServerConnection")) {
+                errorType = "NoServerAvailable";
+            } else if (e instanceof NullPointerException) {
+                errorType = "NullPointer";
+            } else {
+                errorType = e.getClass().getSimpleName();
+            }
+            String line = "ERROR " + query.toString() + " " + errorType +
+                    " ServerZone:" + (serverZone > 0 ? serverZone : "?") +
+                    " WaitMs:? ExecMs:?" + (turnMs != null ? (" TurnMs:" + turnMs) : "") +
+                    " TotalMs:" + totalMs + " [" + e.getMessage() + "]" + System.lineSeparator();
+            synchronized (OUTPUT_LOCK) {
+                try (FileWriter fw = new FileWriter(outputPath, true)) {
+                    fw.write(line);
+                } catch (IOException ioEx) {
+                    logger.log(Level.SEVERE, "Also failed to write error to output", ioEx);
+                }
+            }
         }
+        return null;
     }
 
     private static String deriveMetricsPath(String outputPath) {
@@ -197,90 +314,246 @@ public class Client {
     // Parses the input file and populates the queries list
     private void parseInputFile() {
         try {
-            String inputPath = System.getenv().getOrDefault("INPUT_PATH", "exercise_1_input.txt");
-            File file = new File(inputPath);
+            File file = new File("exercise_1_input.txt");
             Scanner scanner = new Scanner(file);
+            int lineNumber = 0;
+            
             while (scanner.hasNextLine()) {
-                String line = scanner.nextLine().trim();
+                String originalLine = scanner.nextLine();
+                lineNumber++;
+                String line = originalLine.trim();
+                
                 if (line.isEmpty()) continue;
-
+                
+                System.out.println("DEBUG Line " + lineNumber + ": '" + originalLine + "'");
+                
+                // Handle the case where Zone: is concatenated with the next method call
+                String processedLine = line.replaceAll("Zone:(\\d+)([a-zA-Z])", "Zone:$1 $2");
+                if (!processedLine.equals(line)) {
+                    System.out.println("DEBUG Line " + lineNumber + " after regex: '" + processedLine + "'");
+                }
+                line = processedLine;
+                
                 int zoneIdx = line.lastIndexOf("Zone:");
-                if (zoneIdx == -1) continue;
-
+                if (zoneIdx == -1) {
+                    System.out.println("DEBUG Line " + lineNumber + ": No Zone: found, skipping");
+                    continue;
+                }
+                
                 String beforeZone = line.substring(0, zoneIdx).trim();
                 String zoneStr = line.substring(zoneIdx + 5).trim();
+                
+                System.out.println("DEBUG Line " + lineNumber + ": beforeZone='" + beforeZone + "', zoneStr='" + zoneStr + "'");
+                
                 int zone;
                 try {
                     zone = Integer.parseInt(zoneStr);
                 } catch (NumberFormatException e) {
-                    logger.warning("Invalid zone in line: " + line);
+                    logger.warning("Invalid zone in line " + lineNumber + ": " + line);
                     continue;
                 }
-
-                Scanner lineScanner = new Scanner(beforeZone);
-                if (!lineScanner.hasNext()) {
-                    lineScanner.close();
-                    continue;
-                }
-                String methodName = lineScanner.next();
-                String rest = lineScanner.hasNext() ? lineScanner.nextLine().trim() : "";
-                lineScanner.close();
-
+                
+                // Parse the method call part
+                String[] tokens = beforeZone.split("\\s+");
+                if (tokens.length == 0) continue;
+                
+                String methodName = tokens[0];
+                System.out.println("DEBUG Line " + lineNumber + ": methodName='" + methodName + "'");
+                System.out.println("DEBUG Line " + lineNumber + ": tokens=" + java.util.Arrays.toString(tokens));
+                
                 List<String> args = new ArrayList<>();
+                
                 switch (methodName) {
-                    case "getPopulationofCountry" -> {
-                        if (!rest.isEmpty()) {
-                            args.add(rest);
-                        }
-                    }
-
-                    case "getNumberofCities", "getNumberofCountries" -> {
-                        // Accepts: [countryName|cityCount] [threshold] [optional operator: >, <, =]
-                        String[] parts = rest.split("\\s+");
-                        if (parts.length < 2) {
-                            logger.warning("Invalid argument count for " + methodName + ": " + line);
+                    case "getPopulationofCountry": {
+                        if (tokens.length >= 2) {
+                            StringBuilder countryName = new StringBuilder();
+                            for (int i = 1; i < tokens.length; i++) {
+                                if (i > 1) countryName.append(" ");
+                                countryName.append(tokens[i]);
+                            }
+                            args.add(countryName.toString());
+                            System.out.println("DEBUG Line " + lineNumber + ": getPopulationofCountry args=" + args);
+                        } else {
+                            logger.warning("Missing country name for getPopulationofCountry at line " + lineNumber + ": " + line);
                             continue;
                         }
-                        args.add(parts[0]);
-                        args.add(parts[1]);
-                        int compInt = 1; // default 'min' (>= threshold)
-                        if (parts.length >= 3) {
-                            String compStr = parts[2].trim().toLowerCase();
-                            if (compStr.equals(">") || compStr.equals("=") || compStr.equals("min")) {
-                                compInt = 1; // min => population >= threshold
-                            } else if (compStr.equals("<") || compStr.equals("max")) {
-                                compInt = 2; // max => population <= threshold
+                        break;
+                    }
+                    
+                    case "getNumberofCities": {
+                        // Expected signature: getNumberofCities(String countryName, int threshold, int comparison)
+                        // Input format: getNumberofCities CountryName threshold [min|max|=]
+                        // Example: "getNumberofCities Equatorial Guinea 42670 min"
+                        
+                        if (tokens.length >= 3) {
+                            // Find the numeric threshold by scanning from the end
+                            int thresholdIdx = -1;
+                            String operatorStr = null;
+                            
+                            // Check if last token is an operator (min/max/=)
+                            String lastToken = tokens[tokens.length - 1];
+                            if (lastToken.equals("min") || lastToken.equals("max") || lastToken.equals("=") || 
+                                lastToken.equals(">") || lastToken.equals("<")) {
+                                operatorStr = lastToken;
+                                // Look for threshold in second-to-last position
+                                if (tokens.length >= 4) {
+                                    try {
+                                        Integer.parseInt(tokens[tokens.length - 2]);
+                                        thresholdIdx = tokens.length - 2;
+                                    } catch (NumberFormatException e) {
+                                        // Threshold not in expected position
+                                    }
+                                }
                             } else {
-                                logger.warning("Invalid comparison operator for " + methodName + ": " + line);
+                                // No operator, last token should be threshold
+                                try {
+                                    Integer.parseInt(lastToken);
+                                    thresholdIdx = tokens.length - 1;
+                                } catch (NumberFormatException e) {
+                                    // Last token is not numeric, look backwards
+                                }
+                            }
+                            
+                            // If we haven't found threshold yet, scan backwards
+                            if (thresholdIdx == -1) {
+                                for (int j = tokens.length - 1; j >= 1; j--) {
+                                    try {
+                                        Integer.parseInt(tokens[j]);
+                                        thresholdIdx = j;
+                                        break;
+                                    } catch (NumberFormatException e) {
+                                        // Continue looking
+                                    }
+                                }
+                            }
+                            
+                            if (thresholdIdx == -1) {
+                                logger.warning("No numeric threshold found for getNumberofCities at line " + lineNumber + ": " + line);
                                 continue;
                             }
-                        }
-                        args.add(String.valueOf(compInt));
-                    }
-                    case "getNumberofCountriesMM" -> {
-                        // expects: cityCount minPopulation maxPopulation
-                        String[] mmParts = rest.split("\\s+");
-                        if (mmParts.length >= 3) {
-                            args.add(mmParts[0]);
-                            args.add(mmParts[1]);
-                            args.add(mmParts[2]);
+                            
+                            // Build country name from tokens before threshold
+                            StringBuilder countryName = new StringBuilder();
+                            for (int j = 1; j < thresholdIdx; j++) {
+                                if (j > 1) countryName.append(" ");
+                                countryName.append(tokens[j]);
+                            }
+                            
+                            args.add(countryName.toString());
+                            args.add(tokens[thresholdIdx]); // threshold
+                            
+                            // Parse comparison operator
+                            int compInt = 1; // default '>' (greater than)
+                            if (operatorStr != null) {
+                                switch (operatorStr) {
+                                    case "min":
+                                    case ">":
+                                        compInt = 1; // greater than
+                                        break;
+                                    case "max":
+                                    case "<":
+                                        compInt = 2; // less than
+                                        break;
+                                    case "=":
+                                        compInt = 3; // equal to
+                                        break;
+                                    default:
+                                        logger.warning("Unknown comparison operator: " + operatorStr + " at line " + lineNumber + ": " + line);
+                                        compInt = 1;
+                                }
+                            }
+                            args.add(String.valueOf(compInt));
+                            System.out.println("DEBUG Line " + lineNumber + ": getNumberofCities args=" + args);
                         } else {
-                            logger.warning("Invalid argument count for " + methodName + ": " + line);
+                            logger.warning("Invalid argument count for getNumberofCities at line " + lineNumber + ": " + line);
                             continue;
                         }
+                        break;
                     }
-
-                    default -> {
-                        logger.warning("Unknown method: " + methodName);
+                    
+                    case "getNumberofCountries": {
+                        // Expected signature: getNumberofCountries(int cityCount, int threshold, int comp)
+                        // Input format: getNumberofCountries cityCount threshold [min|max|=]
+                        // Example: "getNumberofCountries 4 68626 max"
+                        
+                        if (tokens.length >= 3) {
+                            // First argument should be cityCount (numeric)
+                            try {
+                                Integer.parseInt(tokens[1]); // Validate it's numeric
+                                args.add(tokens[1]); // cityCount
+                            } catch (NumberFormatException e) {
+                                logger.warning("Invalid cityCount (not numeric) for getNumberofCountries at line " + lineNumber + ": " + line);
+                                continue;
+                            }
+                            
+                            // Second argument should be threshold (numeric)
+                            try {
+                                Integer.parseInt(tokens[2]); // Validate it's numeric
+                                args.add(tokens[2]); // threshold
+                            } catch (NumberFormatException e) {
+                                logger.warning("Invalid threshold (not numeric) for getNumberofCountries at line " + lineNumber + ": " + line);
+                                continue;
+                            }
+                            
+                            // Third argument is optional comparison operator
+                            int compInt = 1; // default '>' (greater than)
+                            if (tokens.length >= 4) {
+                                String compStr = tokens[3];
+                                switch (compStr) {
+                                    case "min":
+                                    case ">":
+                                        compInt = 1; // greater than
+                                        break;
+                                    case "max":
+                                    case "<":
+                                        compInt = 2; // less than
+                                        break;
+                                    case "=":
+                                        compInt = 3; // equal to
+                                        break;
+                                    default:
+                                        logger.warning("Unknown comparison operator: " + compStr + " at line " + lineNumber + ": " + line);
+                                        compInt = 1;
+                                }
+                            }
+                            args.add(String.valueOf(compInt));
+                            System.out.println("DEBUG Line " + lineNumber + ": getNumberofCountries args=" + args);
+                        } else {
+                            logger.warning("Invalid argument count for getNumberofCountries at line " + lineNumber + ": " + line);
+                            continue;
+                        }
+                        break;
+                    }
+                    
+                    case "getNumberofCountriesMM": {
+                        if (tokens.length >= 4) {
+                            args.add(tokens[1]);
+                            args.add(tokens[2]);
+                            args.add(tokens[3]);
+                            System.out.println("DEBUG Line " + lineNumber + ": getNumberofCountriesMM args=" + args);
+                        } else {
+                            logger.warning("Invalid argument count for getNumberofCountriesMM at line " + lineNumber + ": " + line);
+                            continue;
+                        }
+                        break;
+                    }
+                    
+                    default: {
+                        logger.warning("Unknown method: " + methodName + " at line " + lineNumber);
                         continue;
                     }
                 }
-
-                queries.add(new Query(methodName, args, zone));
+                
+                Query query = new Query(methodName, args, zone);
+                queries.add(query);
+                System.out.println("DEBUG Line " + lineNumber + ": Created query: " + query.toString());
+                System.out.println("DEBUG Line " + lineNumber + ": Query methodName field: '" + query.methodName + "'");
+                System.out.println("---");
             }
+            
             scanner.close();
         } catch (FileNotFoundException e) {
-            logger.log(Level.SEVERE, "Input file not found: " + System.getenv().getOrDefault("INPUT_PATH", "exercise_1_input.txt"), e);
+            logger.log(Level.SEVERE, "Input file not found: exercise_1_input.txt", e);
         }
     }
 }

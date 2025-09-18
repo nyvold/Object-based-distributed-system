@@ -315,7 +315,7 @@ services:
       - JAVA_MAIN=com.ass1.client.Client
       - PROXY_HOST=proxy
       - JVM_OPTS=-Djava.rmi.server.hostname=client
-      - OUTPUT_PATH=/app/out/output.txt
+      - OUTPUT_PATH=/app/out/naive_server.txt
     depends_on:
       proxy:
         condition: service_started
