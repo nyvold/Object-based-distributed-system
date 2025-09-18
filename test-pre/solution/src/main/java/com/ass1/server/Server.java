@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
+import java.util.logging.Logger;
 // + New imports for file logging
 import java.io.File;
 import java.io.FileWriter;
