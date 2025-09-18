@@ -8,12 +8,8 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
+// no concurrency imports needed in the sequential client
 import java.util.Scanner;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -53,9 +49,14 @@ public class Client {
             File parent = outFile.getParentFile();
             if (parent != null) parent.mkdirs();
             try (FileWriter fw = new FileWriter(outFile, false)) {
-                // Header describing the output categories
-                fw.write("# Columns: result|ERROR method args Zone:N ServerZone:Z WaitMs ExecMs TurnMs TotalMs [errorType]\n");
+                // Human-readable header
+                fw.write("# Columns: result|ERROR method args Zone:N ServerZone:Z WaitMs ExecMs TurnMs TotalMs [errorType]\\n");
                 logger.info("Cleared output and wrote header: " + outputPath);
+            }
+            // Initialize metrics CSV next to output
+            String metricsPath = System.getenv().getOrDefault("METRICS_PATH", deriveMetricsPath(outputPath));
+            try (FileWriter mw = new FileWriter(metricsPath, false)) {
+                mw.write("method,args,client_zone,server_zone,value,status,wait_ms,exec_ms,turn_ms,total_ms,start_ms,end_ms\n");
             }
         } catch (IOException e) {
             logger.log(Level.SEVERE, "Failed to clear output: " + outputPath, e);
@@ -72,39 +73,97 @@ public class Client {
 
     public void sendQueries() {
         String outputPath = System.getenv().getOrDefault("OUTPUT_PATH", "output.txt");
-        int minT = parseIntEnv("CLIENT_T_MIN_MS", 20);
-        int maxT = parseIntEnv("CLIENT_T_MAX_MS", 50);
-        if (minT > maxT) { int tmp = minT; minT = maxT; maxT = tmp; }
+        String metricsPath = System.getenv().getOrDefault("METRICS_PATH", deriveMetricsPath(outputPath));
+        int processed = 0, successful = 0, failed = 0;
+        try (FileWriter fw = new FileWriter(outputPath, true);
+             FileWriter mw = new FileWriter(metricsPath, true)) {
+            for (Query query : queries) {
+                try {
+                    processed++;
+                    logger.info("Processing query: " + query);
+                    long t0 = System.nanoTime();
+                    long startMs = System.currentTimeMillis();
 
-        ExecutorService pool = Executors.newCachedThreadPool();
-        List<Future<?>> futures = new ArrayList<>();
-        Random rnd = new Random();
+                    String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "proxy");
+                    Registry registry = LocateRegistry.getRegistry(proxyHost, 1099);
+                    ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
+                    logger.info("Connected to proxy.");
 
-        final int minDelay = minT;
-        final int maxDelay = maxT;
+                    ServerConnection serverConn = proxy.connectToServer(query.zone);
+                    logger.info("Proxy assigned server: " + serverConn.getBindingName() + " at " + serverConn.getServerAddress() + ":" + serverConn.getServerPort());
 
-        Thread scheduler = new Thread(() -> {
-            for (Query q : queries) {
-                futures.add(pool.submit(() -> processOne(q, outputPath)));
-                int T = minDelay + (maxDelay > minDelay ? rnd.nextInt(maxDelay - minDelay + 1) : 0);
-                try { Thread.sleep(T); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                    registry = LocateRegistry.getRegistry(serverConn.getServerAddress(), serverConn.getServerPort());
+                    ServerInterface server = (ServerInterface) registry.lookup(serverConn.getBindingName());
+                    logger.info("Connected to server: " + serverConn.getBindingName());
+
+                    long callStart = System.nanoTime();
+                    Result r;
+                    if (query.methodName.equals("getPopulationofCountry") && query.args.size() == 1) {
+                        String countryName = query.args.get(0);
+                        r = server.getPopulationofCountry(countryName);
+                    } else if (query.methodName.equals("getNumberofCities") && query.args.size() == 3) {
+                        String countryName = query.args.get(0);
+                        int threshold = Integer.parseInt(query.args.get(1));
+                        int comparison = Integer.parseInt(query.args.get(2));
+                        r = server.getNumberofCities(countryName, threshold, comparison);
+                    } else if (query.methodName.equals("getNumberofCountries") && query.args.size() == 3) {
+                        int cityCount = Integer.parseInt(query.args.get(0));
+                        int threshold = Integer.parseInt(query.args.get(1));
+                        int comparison = Integer.parseInt(query.args.get(2));
+                        r = server.getNumberofCountries(cityCount, threshold, comparison);
+                    } else if (query.methodName.equals("getNumberofCountriesMM") && query.args.size() == 3) {
+                        int cityCount = Integer.parseInt(query.args.get(0));
+                        int minPopulation = Integer.parseInt(query.args.get(1));
+                        int maxPopulation = Integer.parseInt(query.args.get(2));
+                        r = server.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation);
+                    } else {
+                        String res = "Invalid query: " + query.toString();
+                        logger.warning(res);
+                        long t1 = System.nanoTime();
+                        long totalMs = (t1 - t0) / 1_000_000L;
+                        fw.write(res + System.lineSeparator());
+                        mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
+                                query.zone + ",,," + csv("INVALID") + ",,," + totalMs + "," +
+                                startMs + "," + System.currentTimeMillis() + "\n");
+                        continue;
+                    }
+
+                    long t1 = System.nanoTime();
+                    long totalMs = (t1 - t0) / 1_000_000L;
+                    long turnMs = (t1 - callStart) / 1_000_000L;
+                    String line = (r.getValue() + " ") + query.toString() +
+                            " ServerZone:" + serverConn.getZone() +
+                            " WaitMs:" + r.getWaitMs() +
+                            " ExecMs:" + r.getExecMs() +
+                            " TurnMs:" + turnMs +
+                            " TotalMs:" + totalMs + System.lineSeparator();
+                    fw.write(line);
+                    mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
+                            query.zone + "," + serverConn.getZone() + "," + r.getValue() + ",OK," +
+                            r.getWaitMs() + "," + r.getExecMs() + "," + turnMs + "," + totalMs + "," +
+                            startMs + "," + System.currentTimeMillis() + "\n");
+                    fw.flush();
+                    successful++;
+                    logger.info("Wrote result to: " + outputPath);
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
+                    try {
+                        long nowMs = System.currentTimeMillis();
+                        fw.write("ERROR " + query.toString() + " " + e.getClass().getSimpleName() + System.lineSeparator());
+                        mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
+                                query.zone + ",,," + csv("ERROR:" + e.getClass().getSimpleName()) + ",,,," +
+                                nowMs + "," + nowMs + "\n");
+                        fw.flush();
+                        failed++;
+                    } catch (IOException ioe) {
+                        logger.log(Level.SEVERE, "Also failed to write error to output", ioe);
+                    }
+                }
             }
-        });
-        scheduler.setName("client-scheduler");
-        scheduler.start();
-
-        try {
-            scheduler.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, "Failed to write to output: " + outputPath, e);
         }
-
-        pool.shutdown();
-        try {
-            pool.awaitTermination(5, TimeUnit.MINUTES);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        logger.info("Client summary: processed=" + processed + ", successful=" + successful + ", failed=" + failed);
     }
 
     private Void processOne(Query query, String outputPath) {
@@ -236,14 +295,20 @@ public class Client {
         return null;
     }
 
-    private static int parseIntEnv(String name, int def) {
-        String v = System.getenv(name);
-        if (v == null) return def;
+    private static String deriveMetricsPath(String outputPath) {
         try {
-            return Integer.parseInt(v.trim());
-        } catch (NumberFormatException e) {
-            return def;
-        }
+            File out = new File(outputPath);
+            File dir = out.getParentFile();
+            if (dir != null) return new File(dir, "metrics.csv").getPath();
+        } catch (Exception ignore) {}
+        return "metrics.csv";
+    }
+
+    private static String csv(String s) {
+        if (s == null) return "";
+        String esc = s.replace("\"", "\"\"");
+        if (esc.indexOf(',') >= 0 || esc.indexOf(' ') >= 0) return '"' + esc + '"';
+        return esc;
     }
 
     // Parses the input file and populates the queries list

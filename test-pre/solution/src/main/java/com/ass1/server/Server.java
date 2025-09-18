@@ -23,6 +23,7 @@ public class Server implements ServerInterface{
 
     private final BlockingQueue<FutureTask<?>> queue = new LinkedBlockingQueue<>();
     private static final int BASE_NETWORK_MS = 80; // base communication latency per assignment
+    private static final int EXEC_DELAY_MS = parseIntEnv("SERVER_EXEC_DELAY_MS", 0); // optional simulated exec time
 
     public Server(
         String address, 
@@ -84,6 +85,7 @@ public class Server implements ServerInterface{
         simulateBaseNetworkLatency();
         TimedTask<Integer> assignment = new TimedTask<>(() -> {
             try {
+                maybeExecDelay();
                 long val = stats.getPopulationofCountry(countryName);
                 return Math.toIntExact(val);
             } catch (SQLException e) {
@@ -108,6 +110,7 @@ public class Server implements ServerInterface{
         TimedTask<Integer> assignment = new TimedTask<>(() -> {
             String comp = (comparison == 2) ? "max" : "min"; // 1=min (>=), 2=max (<=)
             try {
+                maybeExecDelay();
                 long val = stats.getNumberofCities(countryName, threshold, comp);
                 return Math.toIntExact(val);
             } catch (SQLException e) {
@@ -132,6 +135,7 @@ public class Server implements ServerInterface{
         TimedTask<Integer> assignment = new TimedTask<>(() -> {
             String comparison = (comp == 2) ? "max" : "min"; // 1=min (>=), 2=max (<=)
             try {
+                maybeExecDelay();
                 long val = stats.getNumberofCountries(cityCount, threshold, comparison);
                 return Math.toIntExact(val);
             } catch (SQLException e) {
@@ -155,6 +159,7 @@ public class Server implements ServerInterface{
         simulateBaseNetworkLatency();
         TimedTask<Integer> assignment = new TimedTask<>(() -> {
             try {
+                maybeExecDelay();
                 long val = stats.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation);
                 return Math.toIntExact(val);
             } catch (SQLException e) {
@@ -187,11 +192,18 @@ public class Server implements ServerInterface{
     public String getBindingName() {return bindingName; }
 
     private static void simulateBaseNetworkLatency() {
-        try {
-            Thread.sleep(BASE_NETWORK_MS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        try { Thread.sleep(BASE_NETWORK_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+
+    private static void maybeExecDelay() {
+        if (EXEC_DELAY_MS <= 0) return;
+        try { Thread.sleep(EXEC_DELAY_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+
+    private static int parseIntEnv(String name, int def) {
+        String v = System.getenv(name);
+        if (v == null) return def;
+        try { return Integer.parseInt(v.trim()); } catch (NumberFormatException e) { return def; }
     }
 
     private static final class TimedTask<V> extends FutureTask<V> {
