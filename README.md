@@ -14,7 +14,7 @@ Run via CLI
   - `docker compose run --rm -e JAVA_ARGS="--client-cache=false --server-cache=false" client`
 
 - Run with SERVER cache
-  - `docker compose run --rm -e JAVA_ARGS="--client-cache=false --server-cache=true" client`
+  - `docker compose run --rm -e SERVER_CACHE=true -e METRICS_PATH=/app/out/metrics_server_cache.csv -e JAVA_ARGS="--client-cache=false" client`
 
 - Run WITH CLIENT cachce
   - `docker compose run --rm -e JAVA_ARGS="--client-cache=true --server-cache=false" client`
