@@ -26,18 +26,16 @@ public class Client {
         public String methodName;
         public List<String> args;
         public int zone;
-        public int id; // sequential id assigned at parse time
 
-        public Query(String methodName, List<String> args, int zone, int id) {
+        public Query(String methodName, List<String> args, int zone) {
             this.methodName = methodName;
             this.args = args;
             this.zone = zone;
-            this.id = id;
         }
 
         @Override
         public String toString() {
-            return "#" + id + " " + methodName + " " + String.join(" ", args) + " Zone:" + zone;
+            return methodName + " " + String.join(" ", args) + " Zone:" + zone;
         }
     }
 
@@ -69,7 +67,7 @@ public class Client {
             for (Query query : queries) {
                 try {
                     processed++;
-                    logger.info("Processing query [" + query.id + "]: " + query);
+                    logger.info("Processing query: " + query);
                     String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "proxy");
                     Registry registry = LocateRegistry.getRegistry(proxyHost, 1099);
                     ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
@@ -111,12 +109,12 @@ public class Client {
                     fw.write(result + query.toString() + System.lineSeparator());
                     fw.flush();
                     successful++;
-                    logger.info("Wrote result for id=" + query.id + " to: " + outputPath);
+                    logger.info("Wrote result to: " + outputPath);
                     Thread.sleep(delay);
                 } catch (Exception e) {
-                    logger.log(Level.SEVERE, "Exception while processing query [" + query.id + "]: " + query, e);
+                    logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
                     try {
-                        fw.write("ERROR #" + query.id + " " + query.toString() + " " + e.getClass().getSimpleName() + System.lineSeparator());
+                        fw.write("ERROR " + query.toString() + " " + e.getClass().getSimpleName() + System.lineSeparator());
                         fw.flush();
                         failed++;
                     } catch (IOException ioe) {
@@ -136,7 +134,6 @@ public class Client {
             String inputPath = System.getenv().getOrDefault("INPUT_PATH", "exercise_1_input.txt");
             File file = new File(inputPath);
             Scanner scanner = new Scanner(file);
-            int qid = 0; // sequential id for valid queries
             while (scanner.hasNextLine()) {
                 String line = scanner.nextLine().trim();
                 if (line.isEmpty()) continue;
@@ -213,7 +210,7 @@ public class Client {
                     }
                 }
 
-                queries.add(new Query(methodName, args, zone, ++qid));
+                queries.add(new Query(methodName, args, zone));
             }
             scanner.close();
         } catch (FileNotFoundException e) {
