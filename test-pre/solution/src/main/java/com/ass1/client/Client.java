@@ -82,26 +82,29 @@ public class Client {
                     if(query.methodName.equals("getPopulationofCountry") && query.args.size() == 1) {
                         String countryName = query.args.get(0);
                         result = server.getPopulationofCountry(countryName) + " ";
+                        fw.write(result + query.toString() + " " + System.lineSeparator());
                     } else if (query.methodName.equals("getNumberofCities") && query.args.size() == 3) {
                         String countryName = query.args.get(0);
                         int threshold = Integer.parseInt(query.args.get(1));
                         int comparison = Integer.parseInt(query.args.get(2));
                         result = server.getNumberofCities(countryName, threshold, comparison) + " ";
+                        fw.write(result + query.toString() + " " + System.lineSeparator());
                     } else if (query.methodName.equals("getNumberofCountries") && query.args.size() == 3) {
                         int cityCount = Integer.parseInt(query.args.get(0));
                         int threshold = Integer.parseInt(query.args.get(1));
                         int comparison = Integer.parseInt(query.args.get(2));
                         result = server.getNumberofCountries(cityCount, threshold, comparison) + " ";
+                        fw.write(result + query.toString() + " " + System.lineSeparator());
                     } else if (query.methodName.equals("getNumberofCountriesMM") && query.args.size() == 3) {
                         int cityCount = Integer.parseInt(query.args.get(0));
                         int minPopulation = Integer.parseInt(query.args.get(1));
                         int maxPopulation = Integer.parseInt(query.args.get(2));
                         result = server.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation) + " ";
+                        fw.write(result + query.toString() + " " + System.lineSeparator());
                     } else {
                         result = "Invalid query: " + query.toString();
                         logger.warning(result);
                     }
-                    fw.write(result + query.toString() + " " + System.lineSeparator());
                     logger.info("Wrote result to: " + outputPath);
                     Thread.sleep(delay);
                 } catch (Exception e) {
@@ -153,23 +156,24 @@ public class Client {
                     }
 
                     case "getNumberofCities", "getNumberofCountries" -> {
-                        // expects: countryName/cityCount threshold comparison
+                        // Accepts: [countryName|cityCount] [threshold] [optional operator: >, <, =]
                         String[] parts = rest.split("\\s+");
+                        if (parts.length < 2) {
+                            logger.warning("Invalid argument count for " + methodName + ": " + line);
+                            continue;
+                        }
+                        args.add(parts[0]);
+                        args.add(parts[1]);
+                        int compInt = 1; // default '>' if missing
                         if (parts.length >= 3) {
-                            args.add(parts[0]);
-                            args.add(parts[1]);
-                            // Convert comparison string to int
                             String compStr = parts[2];
-                            int compInt = "=".equals(compStr) ? 3 : (">".equals(compStr) ? 1 : ("<".equals(compStr) ? 2 : 0));
+                            compInt = "=".equals(compStr) ? 3 : (">".equals(compStr) ? 1 : ("<".equals(compStr) ? 2 : 0));
                             if (compInt == 0) {
                                 logger.warning("Invalid comparison operator for " + methodName + ": " + line);
                                 continue;
                             }
-                            args.add(String.valueOf(compInt));
-                        } else {
-                            logger.warning("Invalid argument count for " + methodName + ": " + line);
-                            continue;
                         }
+                        args.add(String.valueOf(compInt));
                     }
                     case "getNumberofCountriesMM" -> {
                         // expects: cityCount minPopulation maxPopulation
