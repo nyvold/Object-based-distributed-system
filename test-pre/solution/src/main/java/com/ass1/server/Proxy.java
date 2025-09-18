@@ -1,13 +1,18 @@
 package com.ass1.server;
 
+import java.rmi.AlreadyBoundException;
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Proxy implements ProxyInterface {
+    private static final Logger logger = Logger.getLogger(Proxy.class.getName());
 
     // Proxy composition: Proxy, Refresher, LoadBalancer
     // Proxy responsability: entry point for client requests, registration of servers, and coordination
@@ -65,7 +70,7 @@ public class Proxy implements ProxyInterface {
         // Doing it here avoids remote containers attempting to rebind, which the
         // RMI registry disallows ("origin is non-local host").
         registry.rebind(assignedBindingName, serverStub);
-        System.out.println("[Proxy] Bound server for zone " + zone + " as '" + assignedBindingName + "' in local registry");
+        logger.info("[Proxy] Bound server for zone " + zone + " as '" + assignedBindingName + "' in local registry");
         return zone;
     }
 
@@ -75,10 +80,12 @@ public class Proxy implements ProxyInterface {
             Registry registry = LocateRegistry.createRegistry(PROXY_PORT);
             Proxy proxy = new Proxy(registry);
             ProxyInterface stub = (ProxyInterface) UnicastRemoteObject.exportObject(proxy, 0);
-            registry.rebind("Proxy", stub); // rebind instead of bind so we dont have to unbind "Proxy" every time we restart or redeploy (because of AlreadyBoundException)
-            System.out.println("[Proxy] Proxy started and bound in registry as 'Proxy' on port 1099.");
-        } catch (RemoteException e) {
-            e.printStackTrace();
+            registry.bind("Proxy", stub); // rebind instead of bind so we dont have to unbind "Proxy" every time we restart or redeploy (because of AlreadyBoundException)
+            logger.info("[Proxy] Proxy started and bound in registry as 'Proxy' on port 1099.");
+        } catch (AlreadyBoundException e) {
+            logger.info("[Proxy] Proxy already bound in registry, using existing binding");
+        } catch (RemoteException ex) {
+            logger.log(Level.SEVERE, "[Proxy] RemoteException in proxy main: " + ex.getLocalizedMessage(), ex);
         }
     }
 }

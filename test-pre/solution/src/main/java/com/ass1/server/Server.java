@@ -16,8 +16,11 @@ import java.util.Collections;
 import java.util.concurrent.Callable;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Server implements ServerInterface{
+    private static final Logger logger = Logger.getLogger(Server.class.getName());
     private String address;
     private int port;
     private int zone;
@@ -98,11 +101,11 @@ public class Server implements ServerInterface{
             System.out.println("[Server] Cache enabled=" + SERVER_CACHE_ENABLED + ", cap=" + SERVER_CACHE_CAP);
             // The proxy binds our stub into its local registry; remote rebinds from
             // this container are disallowed by the registry (non-local host).
-            System.out.println("[Server] Awaiting client lookups via proxy binding: " + server.toString());
+            logger.info("[Server] Awaiting client lookups via proxy binding: " + server.toString());
 
         } catch (RemoteException | NotBoundException e) {
-            e.printStackTrace();
-        } 
+            logger.log(Level.SEVERE, "[Server] Exception in main", e);
+        }
     }
 
     @Override
