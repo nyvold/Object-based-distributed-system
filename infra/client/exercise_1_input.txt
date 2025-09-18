@@ -1,0 +1,4 @@
+getPopulationofCountry Norway Zone:1
+getNumberofCities Norway 100 > Zone:1
+getNumberofCountries 50 1000 = Zone:1
+getNumberofCountriesMM 10 10000 1000000 Zone:1

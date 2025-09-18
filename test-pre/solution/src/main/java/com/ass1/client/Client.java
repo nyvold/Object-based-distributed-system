@@ -26,16 +26,18 @@ public class Client {
         public String methodName;
         public List<String> args;
         public int zone;
+        public int id; // sequential id assigned at parse time
 
-        public Query(String methodName, List<String> args, int zone) {
+        public Query(String methodName, List<String> args, int zone, int id) {
             this.methodName = methodName;
             this.args = args;
             this.zone = zone;
+            this.id = id;
         }
 
         @Override
         public String toString() {
-            return methodName + " " + String.join(" ", args) + " Zone:" + zone;
+            return "#" + id + " " + methodName + " " + String.join(" ", args) + " Zone:" + zone;
         }
     }
 
@@ -62,10 +64,12 @@ public class Client {
 
     public void sendQueries(int delay) {
         String outputPath = System.getenv().getOrDefault("OUTPUT_PATH", "output.txt");
+        int processed = 0, successful = 0, failed = 0;
         try (FileWriter fw = new FileWriter(outputPath, true)) { // Append mode
             for (Query query : queries) {
                 try {
-                    logger.info("Processing query: " + query);
+                    processed++;
+                    logger.info("Processing query [" + query.id + "]: " + query);
                     String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "proxy");
                     Registry registry = LocateRegistry.getRegistry(proxyHost, 1099);
                     ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
@@ -82,45 +86,57 @@ public class Client {
                     if(query.methodName.equals("getPopulationofCountry") && query.args.size() == 1) {
                         String countryName = query.args.get(0);
                         result = server.getPopulationofCountry(countryName) + " ";
-                        fw.write(result + query.toString() + " " + System.lineSeparator());
+
                     } else if (query.methodName.equals("getNumberofCities") && query.args.size() == 3) {
                         String countryName = query.args.get(0);
                         int threshold = Integer.parseInt(query.args.get(1));
                         int comparison = Integer.parseInt(query.args.get(2));
                         result = server.getNumberofCities(countryName, threshold, comparison) + " ";
-                        fw.write(result + query.toString() + " " + System.lineSeparator());
+
                     } else if (query.methodName.equals("getNumberofCountries") && query.args.size() == 3) {
                         int cityCount = Integer.parseInt(query.args.get(0));
                         int threshold = Integer.parseInt(query.args.get(1));
                         int comparison = Integer.parseInt(query.args.get(2));
                         result = server.getNumberofCountries(cityCount, threshold, comparison) + " ";
-                        fw.write(result + query.toString() + " " + System.lineSeparator());
+
                     } else if (query.methodName.equals("getNumberofCountriesMM") && query.args.size() == 3) {
                         int cityCount = Integer.parseInt(query.args.get(0));
                         int minPopulation = Integer.parseInt(query.args.get(1));
                         int maxPopulation = Integer.parseInt(query.args.get(2));
                         result = server.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation) + " ";
-                        fw.write(result + query.toString() + " " + System.lineSeparator());
                     } else {
                         result = "Invalid query: " + query.toString();
                         logger.warning(result);
                     }
-                    logger.info("Wrote result to: " + outputPath);
+                    fw.write(result + query.toString() + System.lineSeparator());
+                    fw.flush();
+                    successful++;
+                    logger.info("Wrote result for id=" + query.id + " to: " + outputPath);
                     Thread.sleep(delay);
                 } catch (Exception e) {
-                    logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
+                    logger.log(Level.SEVERE, "Exception while processing query [" + query.id + "]: " + query, e);
+                    try {
+                        fw.write("ERROR #" + query.id + " " + query.toString() + " " + e.getClass().getSimpleName() + System.lineSeparator());
+                        fw.flush();
+                        failed++;
+                    } catch (IOException ioe) {
+                        logger.log(Level.SEVERE, "Also failed to write error to output", ioe);
+                    }
                 }
             }
         } catch (IOException e) {
             logger.log(Level.SEVERE, "Failed to write to output: " + outputPath, e);
         }
+        logger.info("Client summary: processed=" + processed + ", successful=" + successful + ", failed=" + failed);
     }
 
     // Parses the input file and populates the queries list
     private void parseInputFile() {
         try {
-            File file = new File("exercise_1_input.txt");
+            String inputPath = System.getenv().getOrDefault("INPUT_PATH", "exercise_1_input.txt");
+            File file = new File(inputPath);
             Scanner scanner = new Scanner(file);
+            int qid = 0; // sequential id for valid queries
             while (scanner.hasNextLine()) {
                 String line = scanner.nextLine().trim();
                 if (line.isEmpty()) continue;
@@ -144,7 +160,7 @@ public class Client {
                     continue;
                 }
                 String methodName = lineScanner.next();
-                String rest = lineScanner.hasNextLine() ? lineScanner.nextLine().trim() : "";
+                String rest = lineScanner.hasNext() ? lineScanner.nextLine().trim() : "";
                 lineScanner.close();
 
                 List<String> args = new ArrayList<>();
@@ -164,11 +180,14 @@ public class Client {
                         }
                         args.add(parts[0]);
                         args.add(parts[1]);
-                        int compInt = 1; // default '>' if missing
+                        int compInt = 1; // default 'min' (>= threshold)
                         if (parts.length >= 3) {
-                            String compStr = parts[2];
-                            compInt = "=".equals(compStr) ? 3 : (">".equals(compStr) ? 1 : ("<".equals(compStr) ? 2 : 0));
-                            if (compInt == 0) {
+                            String compStr = parts[2].trim().toLowerCase();
+                            if (compStr.equals(">") || compStr.equals("=") || compStr.equals("min")) {
+                                compInt = 1; // min => population >= threshold
+                            } else if (compStr.equals("<") || compStr.equals("max")) {
+                                compInt = 2; // max => population <= threshold
+                            } else {
                                 logger.warning("Invalid comparison operator for " + methodName + ": " + line);
                                 continue;
                             }
@@ -194,11 +213,11 @@ public class Client {
                     }
                 }
 
-                queries.add(new Query(methodName, args, zone));
+                queries.add(new Query(methodName, args, zone, ++qid));
             }
             scanner.close();
         } catch (FileNotFoundException e) {
-            logger.log(Level.SEVERE, "Input file not found: exercise_1_input.txt", e);
+            logger.log(Level.SEVERE, "Input file not found: " + System.getenv().getOrDefault("INPUT_PATH", "exercise_1_input.txt"), e);
         }
     }
 }
