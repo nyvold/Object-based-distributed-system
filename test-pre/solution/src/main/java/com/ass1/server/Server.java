@@ -106,11 +106,11 @@ public class Server implements ServerInterface{
     }
 
     @Override
-    public Result getPopulationofCountry(String countryName) throws RemoteException {
+    public Result getPopulationofCountry(String countryName, int clientZone) throws RemoteException {
         simulateBaseNetworkLatency();
         TimedTask<Integer> assignment = new TimedTask<>(() -> {
             try {
-                maybeExecDelay();
+                simulateClientDelay(clientZone);
                 String key = "getPopulationofCountry|" + countryName;
                 if (SERVER_CACHE_ENABLED) {
                     Integer hit = cache.get(key);
@@ -139,12 +139,12 @@ public class Server implements ServerInterface{
     }
 
     @Override
-    public Result getNumberofCities(String countryName, int threshold, int comparison) throws RemoteException {
+    public Result getNumberofCities(String countryName, int threshold, int comparison, int clientZone) throws RemoteException {
         simulateBaseNetworkLatency();
         TimedTask<Integer> assignment = new TimedTask<>(() -> {
             String comp = (comparison == 2) ? "max" : "min"; // 1=min (>=), 2=max (<=)
             try {
-                maybeExecDelay();
+                simulateClientDelay(clientZone);
                 String key = "getNumberofCities|" + countryName + "|" + threshold + "|" + comparison;
                 if (SERVER_CACHE_ENABLED) {
                     Integer hit = cache.get(key);
@@ -173,12 +173,12 @@ public class Server implements ServerInterface{
     }
 
     @Override
-    public Result getNumberofCountries(int cityCount, int threshold, int comp) throws RemoteException {
+    public Result getNumberofCountries(int cityCount, int threshold, int comp, int clientZone) throws RemoteException {
         simulateBaseNetworkLatency();
         TimedTask<Integer> assignment = new TimedTask<>(() -> {
             String comparison = (comp == 2) ? "max" : "min"; // 1=min (>=), 2=max (<=)
             try {
-                maybeExecDelay();
+                simulateClientDelay(clientZone);
                 String key = "getNumberofCountries|" + cityCount + "|" + threshold + "|" + comp;
                 if (SERVER_CACHE_ENABLED) {
                     Integer hit = cache.get(key);
@@ -207,11 +207,11 @@ public class Server implements ServerInterface{
     }
 
     @Override
-    public Result getNumberofCountriesMM(int cityCount, int minPopulation, int maxPopulation) throws RemoteException {
+    public Result getNumberofCountriesMM(int cityCount, int minPopulation, int maxPopulation, int clientZone) throws RemoteException {
         simulateBaseNetworkLatency();
         TimedTask<Integer> assignment = new TimedTask<>(() -> {
             try {
-                maybeExecDelay();
+                simulateClientDelay(clientZone);
                 String key = "getNumberofCountriesMM|" + cityCount + "|" + minPopulation + "|" + maxPopulation;
                 if (SERVER_CACHE_ENABLED) {
                     Integer hit = cache.get(key);
@@ -256,9 +256,12 @@ public class Server implements ServerInterface{
         try { Thread.sleep(BASE_NETWORK_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
-    private static void maybeExecDelay() {
-        if (EXEC_DELAY_MS <= 0) return;
-        try { Thread.sleep(EXEC_DELAY_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    private void simulateClientDelay(int clientZone){
+        try {
+            Thread.sleep(Latency.commMs(clientZone, this.zone, 5));
+        } catch (Exception e) {
+            System.out.println("[Server " + this.zone + "] could not simulate delay.");
+        }
     }
 
     private static int parseIntEnv(String name, int def) {
