@@ -1,14 +1,13 @@
 package com.ass1.server;
 
-import java.rmi.registry.Registry;
 import java.util.ArrayList;
 import java.util.Map;
 
 public class LoadBalancer {
     private static int MAX_LOAD = 18;
 
-    private Map<Integer, ServerInterface> serverStubs;
-    private Map<Integer, Integer> serverLoads;
+    private Map<Integer, ServerInterface> serverStubs; // <zone, ServerInterface>
+    private Map<Integer, Integer> serverLoads; // <zone, serverLoad>
 
     public LoadBalancer(
         Map<Integer, ServerInterface> serverStubs, 
@@ -19,11 +18,15 @@ public class LoadBalancer {
     }
 
     public int selectBestServerForZone(int clientZone){
+        // returns zone of server most optimal for client to use
+
+        // server zone same as client
         Integer sameZoneLoad = serverLoads.get(clientZone);
         if (sameZoneLoad != null && sameZoneLoad < MAX_LOAD) {
             return clientZone;
         }
 
+        // finds servers with smallest load
         int minLoad = Integer.MAX_VALUE;
         ArrayList<Integer> leastLoadedZones = new ArrayList<>();
         for (Map.Entry<Integer, Integer> entry : serverLoads.entrySet()) {
@@ -47,11 +50,13 @@ public class LoadBalancer {
         if (serverLoads.containsKey(clientZone)) {
             return clientZone;
         }
-
+        // last option, server closest clockwise
         return getNearestServer(clientZone, new ArrayList<>(serverStubs.keySet()));
     }
 
     public int getNearestServer(int fromZone, ArrayList<Integer> zones) {
+        // returns zone closest clockwise
+
         if (zones == null || zones.isEmpty()) {
             System.out.println("[LoadBalancer] getNearestServer(): zones is empty or null, check if servers active");
             throw new IllegalArgumentException("No zones available to select from.");

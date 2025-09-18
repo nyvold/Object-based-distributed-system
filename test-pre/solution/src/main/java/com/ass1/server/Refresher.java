@@ -12,7 +12,7 @@ public class Refresher {
     public static int MAX_POLL_ASSIGNMENTS = 18;
     private final Registry registry;
     private final ExecutorService ioPool = Executors.newCachedThreadPool();
-    private Map<Integer, Integer> serverLoads;
+    private Map<Integer, Integer> serverLoads; // <zone, serverLoad>
 
     public Refresher(
         Registry registry, 
@@ -27,6 +27,7 @@ public class Refresher {
     }
 
     private void refreshServer(int zone){
+        // updates serverLoads for proxys use
         try{
             String bindingName = "server_zone_" + zone;
             ServerInterface server = (ServerInterface) registry.lookup(bindingName);
