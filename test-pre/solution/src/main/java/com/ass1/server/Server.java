@@ -12,12 +12,17 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Collections;
 import java.util.concurrent.Callable;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+// + New imports for file logging
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class Server implements ServerInterface{
     private static final Logger logger = Logger.getLogger(Server.class.getName());
@@ -38,11 +43,14 @@ public class Server implements ServerInterface{
     };
     private static final int BASE_NETWORK_MS = 80; // base communication latency per assignment
     private static final int EXEC_DELAY_MS = parseIntEnv("SERVER_EXEC_DELAY_MS", 0); // optional simulated exec time
+    // + Scheduler and Writer for file-based logging
+    private final ScheduledExecutorService logScheduler = Executors.newSingleThreadScheduledExecutor();
+    private PrintWriter logWriter;
 
     public Server(
-        String address, 
-        int port, 
-        int zone, 
+        String address,
+        int port,
+        int zone,
         String bindingName
     ) {
         this.address = address;
@@ -97,6 +105,13 @@ public class Server implements ServerInterface{
 
             server.zone = assignedZone;
             server.bindingName = assignedBindingName;
+
+            // +++ Start logging ONLY if this is Server 1 +++
+            if (server.zone == 1) {
+                System.out.println("[Server 1] Starting queue size logging to file...");
+                server.startQueueLogging();
+            }
+
             System.out.println("[Server] Registered server in proxy: " + server.bindingName + " (zone " + server.zone + ", address " + server.address + ", port " + server.port + ")");
             System.out.println("[Server] Cache enabled=" + SERVER_CACHE_ENABLED + ", cap=" + SERVER_CACHE_CAP);
             // The proxy binds our stub into its local registry; remote rebinds from
@@ -104,8 +119,48 @@ public class Server implements ServerInterface{
             logger.info("[Server] Awaiting client lookups via proxy binding: " + server.toString());
 
         } catch (RemoteException | NotBoundException e) {
-            logger.log(Level.SEVERE, "[Server] Exception in main", e);
+            e.printStackTrace();
         }
+    }
+
+    public void startQueueLogging() {
+        try {
+            // Get the log file path from an environment variable, with a default value.
+            String logPath = System.getenv().getOrDefault("SERVER1_LOG_PATH", "/app/logs/server1_queue.csv");
+            File logFile = new File(logPath);
+            // Ensure the parent directory (e.g., /app/logs) exists.
+            logFile.getParentFile().mkdirs();
+            // Initialize the PrintWriter to write to the file, overwriting it on each new run.
+            // The 'true' argument enables auto-flushing.
+            this.logWriter = new PrintWriter(new FileWriter(logFile, false), true);
+            // Write the CSV header.
+            this.logWriter.println("timestamp,queue_size");
+            System.out.println("[Server 1] Logging queue size to " + logPath);
+        } catch (IOException e) {
+            System.err.println("FATAL: Could not open log file for Server 1. " + e.getMessage());
+            return; // Exit if the file cannot be opened.
+        }
+
+        // Define the logging task.
+        Runnable logTask = () -> {
+            if (this.logWriter != null) {
+                long currentTimeMs = System.currentTimeMillis();
+                int currentQueueSize = queue.size();
+                // Write the data as a new line in the CSV file.
+                this.logWriter.println(currentTimeMs + "," + currentQueueSize);
+            }
+        };
+
+        // Schedule the task to run every 100 milliseconds.
+        logScheduler.scheduleAtFixedRate(logTask, 0, 100, TimeUnit.MILLISECONDS);
+
+        // Add a shutdown hook to ensure the log file is properly closed when the server stops.
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (logWriter != null) {
+                logWriter.close();
+                System.out.println("[Server 1] Queue log file closed.");
+            }
+        }));
     }
 
     @Override
@@ -138,7 +193,6 @@ public class Server implements ServerInterface{
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
         }
-        
     }
 
     @Override
@@ -172,7 +226,6 @@ public class Server implements ServerInterface{
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
         }
-        
     }
 
     @Override
@@ -206,7 +259,6 @@ public class Server implements ServerInterface{
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
         }
-        
     }
 
     @Override
@@ -239,7 +291,6 @@ public class Server implements ServerInterface{
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
         }
-        
     }
 
     public int getCurrentLoad() { return queue.size(); }
