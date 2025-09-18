@@ -12,8 +12,11 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Server implements ServerInterface{
+    private static final Logger logger = Logger.getLogger(Server.class.getName());
     private String address;
     private int port;
     private int zone;
@@ -67,14 +70,14 @@ public class Server implements ServerInterface{
 
             server.zone = assignedZone;
             server.bindingName = assignedBindingName;
-            System.out.println("[Server] Registered server in proxy: " + server.bindingName + " (zone " + server.zone + ", address " + server.address + ", port " + server.port + ")");
+            logger.info("[Server] Registered server in proxy: " + server.bindingName + " (zone " + server.zone + ", address " + server.address + ", port " + server.port + ")");
             // The proxy binds our stub into its local registry; remote rebinds from
             // this container are disallowed by the registry (non-local host).
-            System.out.println("[Server] Awaiting client lookups via proxy binding: " + server.toString());
+            logger.info("[Server] Awaiting client lookups via proxy binding: " + server.toString());
 
         } catch (RemoteException | NotBoundException e) {
-            e.printStackTrace();
-        } 
+            logger.log(Level.SEVERE, "[Server] Exception in main", e);
+        }
     }
 
     @Override
