@@ -1,4 +1,5 @@
-# Columns: result|ERROR method args Zone:N ServerZone:Z WaitMs ExecMs TurnMs TotalMs Cache [errorType]\n189578 getPopulationofCountry French Guiana Zone:4 ServerZone:4 WaitMs:0 ExecMs:102 TurnMs:193 TotalMs:425
+# Columns: result|ERROR method args Zone:N ServerZone:Z WaitMs ExecMs TurnMs TotalMs Cache [errorType]
+189578 getPopulationofCountry French Guiana Zone:4 ServerZone:4 WaitMs:0 ExecMs:102 TurnMs:193 TotalMs:425
 48029 getPopulationofCountry Seychelles Zone:1 ServerZone:1 WaitMs:0 ExecMs:110 TurnMs:199 TotalMs:265
 31731367 getPopulationofCountry Canada Zone:1 ServerZone:1 WaitMs:0 ExecMs:92 TurnMs:176 TotalMs:243
 447039 getPopulationofCountry Equatorial Guinea Zone:2 ServerZone:2 WaitMs:0 ExecMs:111 TurnMs:203 TotalMs:273
