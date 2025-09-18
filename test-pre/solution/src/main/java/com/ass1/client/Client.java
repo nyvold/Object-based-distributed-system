@@ -119,7 +119,15 @@ public class Client {
             logger.info("Connected to proxy.");
 
             ServerConnection serverConn = proxy.connectToServer(query.zone);
-            logger.info("Proxy assigned server: " + serverConn.getBindingName() + " at " + serverConn.getServerAddress() + ":" + serverConn.getServerPort());
+            
+            // Add null check for serverConn
+            if (serverConn == null) {
+                throw new RuntimeException("Proxy returned null ServerConnection for zone " + query.zone + 
+                                        ". No server available for this zone.");
+            }
+            
+            logger.info("Proxy assigned server: " + serverConn.getBindingName() + " at " + 
+                    serverConn.getServerAddress() + ":" + serverConn.getServerPort());
             serverZone = serverConn.getZone();
 
             registry = LocateRegistry.getRegistry(serverConn.getServerAddress(), serverConn.getServerPort());
@@ -129,7 +137,13 @@ public class Client {
             // Simulate extra network latency for cross-zone communication (base 80ms added at server)
             int zoneDiff = Math.abs(serverConn.getZone() - query.zone);
             int extraMs = 30 * zoneDiff;
-            if (extraMs > 0) { try { Thread.sleep(extraMs); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); } }
+            if (extraMs > 0) { 
+                try { 
+                    Thread.sleep(extraMs); 
+                } catch (InterruptedException ignored) { 
+                    Thread.currentThread().interrupt(); 
+                } 
+            }
 
             callStart = System.nanoTime();
             Result r;
@@ -157,31 +171,66 @@ public class Client {
                 long t1 = System.nanoTime();
                 long totalMs = (t1 - t0) / 1_000_000L;
                 String line = invalid + " ServerZone:" + serverZone + " TotalMs:" + totalMs + System.lineSeparator();
-                synchronized (OUTPUT_LOCK) { try (FileWriter fw = new FileWriter(outputPath, true)) { fw.write(line); } }
+                synchronized (OUTPUT_LOCK) { 
+                    try (FileWriter fw = new FileWriter(outputPath, true)) { 
+                        fw.write(line); 
+                    } catch (IOException ioEx) {
+                        logger.log(Level.SEVERE, "Failed to write invalid query result", ioEx);
+                    }
+                }
                 logger.info("Wrote result to: " + outputPath);
                 return null;
             }
+            
+            // Add null check for result
+            if (r == null) {
+                throw new RuntimeException("Server returned null result for query: " + query.toString());
+            }
+            
             long turnaroundMs = (System.nanoTime() - callStart) / 1_000_000L;
             long t1 = System.nanoTime();
             long totalMs = (t1 - t0) / 1_000_000L;
             String line = (r.getValue() + " ") + query.toString() + " ServerZone:" + serverZone +
                     " WaitMs:" + r.getWaitMs() + " ExecMs:" + r.getExecMs() +
                     " TurnMs:" + turnaroundMs + " TotalMs:" + totalMs + System.lineSeparator();
-            synchronized (OUTPUT_LOCK) { try (FileWriter fw = new FileWriter(outputPath, true)) { fw.write(line); } }
+            synchronized (OUTPUT_LOCK) { 
+                try (FileWriter fw = new FileWriter(outputPath, true)) { 
+                    fw.write(line); 
+                } catch (IOException ioEx) {
+                    logger.log(Level.SEVERE, "Failed to write success result", ioEx);
+                }
+            }
             logger.info("Wrote result to: " + outputPath);
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
-            try {
-                long t1 = System.nanoTime();
-                long totalMs = (t1 - t0) / 1_000_000L;
-                Long turnMs = callStart > 0 ? (t1 - callStart) / 1_000_000L : null;
-                String line = "ERROR " + query.toString() + " " + e.getClass().getSimpleName() +
-                        " ServerZone:" + (serverZone > 0 ? serverZone : "?") +
-                        " WaitMs:? ExecMs:?" + (turnMs != null ? (" TurnMs:" + turnMs) : "") +
-                        " TotalMs:" + totalMs + System.lineSeparator();
-                synchronized (OUTPUT_LOCK) { try (FileWriter fw = new FileWriter(outputPath, true)) { fw.write(line); } }
-            } catch (IOException ioe) {
-                logger.log(Level.SEVERE, "Also failed to write error to output", ioe);
+            long t1 = System.nanoTime();
+            long totalMs = (t1 - t0) / 1_000_000L;
+            Long turnMs = callStart > 0 ? (t1 - callStart) / 1_000_000L : null;
+            // Determine error type based on exception
+            String errorType;
+            if (e instanceof java.rmi.NotBoundException) {
+                errorType = "ServiceNotFound";
+            } else if (e instanceof java.rmi.ConnectException) {
+                errorType = "ConnectionFailed";
+            } else if (e instanceof java.net.UnknownHostException) {
+                errorType = "HostNotFound";
+            } else if (e instanceof RuntimeException && e.getMessage().contains("null ServerConnection")) {
+                errorType = "NoServerAvailable";
+            } else if (e instanceof NullPointerException) {
+                errorType = "NullPointer";
+            } else {
+                errorType = e.getClass().getSimpleName();
+            }
+            String line = "ERROR " + query.toString() + " " + errorType +
+                    " ServerZone:" + (serverZone > 0 ? serverZone : "?") +
+                    " WaitMs:? ExecMs:?" + (turnMs != null ? (" TurnMs:" + turnMs) : "") +
+                    " TotalMs:" + totalMs + " [" + e.getMessage() + "]" + System.lineSeparator();
+            synchronized (OUTPUT_LOCK) {
+                try (FileWriter fw = new FileWriter(outputPath, true)) {
+                    fw.write(line);
+                } catch (IOException ioEx) {
+                    logger.log(Level.SEVERE, "Also failed to write error to output", ioEx);
+                }
             }
         }
         return null;
