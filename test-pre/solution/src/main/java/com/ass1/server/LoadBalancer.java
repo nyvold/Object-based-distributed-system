@@ -19,33 +19,39 @@ public class LoadBalancer {
     }
 
     public int selectBestServerForZone(int clientZone){
-        ArrayList<Integer> availableServers = new ArrayList<Integer>();
+        Integer sameZoneLoad = serverLoads.get(clientZone);
+        if (sameZoneLoad != null && sameZoneLoad < MAX_LOAD) {
+            return clientZone;
+        }
+
         int minLoad = Integer.MAX_VALUE;
+        ArrayList<Integer> leastLoadedZones = new ArrayList<>();
         for (Map.Entry<Integer, Integer> entry : serverLoads.entrySet()) {
             int zone = entry.getKey();
             int load = entry.getValue();
+            if (zone == clientZone) continue; 
             if (load < MAX_LOAD) {
                 if (load < minLoad) {
                     minLoad = load;
-                    availableServers.clear();
-                    availableServers.add(zone);
+                    leastLoadedZones.clear();
+                    leastLoadedZones.add(zone);
                 } else if (load == minLoad) {
-                    availableServers.add(zone);
+                    leastLoadedZones.add(zone);
                 }
             }
         }
-        if (!availableServers.isEmpty()) {
-            return getNearestServer(clientZone, availableServers);
+        if (!leastLoadedZones.isEmpty()) {
+            return getNearestServer(clientZone, leastLoadedZones);
         }
+
         if (serverLoads.containsKey(clientZone)) {
             return clientZone;
         }
 
-        return getNearestServer(clientZone, new ArrayList<Integer>(serverStubs.keySet()));
+        return getNearestServer(clientZone, new ArrayList<>(serverStubs.keySet()));
     }
 
     public int getNearestServer(int fromZone, ArrayList<Integer> zones) {
-        // gets closest clockwise
         if (zones == null || zones.isEmpty()) {
             System.out.println("[LoadBalancer] getNearestServer(): zones is empty or null, check if servers active");
             throw new IllegalArgumentException("No zones available to select from.");
