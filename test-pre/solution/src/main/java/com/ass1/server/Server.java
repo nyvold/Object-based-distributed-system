@@ -10,6 +10,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Callable;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
 
@@ -21,6 +22,7 @@ public class Server implements ServerInterface{
     private final StatsService stats;
 
     private final BlockingQueue<FutureTask<?>> queue = new LinkedBlockingQueue<>();
+    private static final int BASE_NETWORK_MS = 80; // base communication latency per assignment
 
     public Server(
         String address, 
@@ -78,8 +80,9 @@ public class Server implements ServerInterface{
     }
 
     @Override
-    public int getPopulationofCountry(String countryName) throws RemoteException {
-        FutureTask<Integer> assignment = new FutureTask<>(() -> {
+    public Result getPopulationofCountry(String countryName) throws RemoteException {
+        simulateBaseNetworkLatency();
+        TimedTask<Integer> assignment = new TimedTask<>(() -> {
             try {
                 long val = stats.getPopulationofCountry(countryName);
                 return Math.toIntExact(val);
@@ -91,7 +94,8 @@ public class Server implements ServerInterface{
         });
         queue.add(assignment);
         try {
-            return assignment.get();
+            int value = assignment.get();
+            return new Result(value, assignment.waitMs(), assignment.execMs());
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
         }
@@ -99,8 +103,9 @@ public class Server implements ServerInterface{
     }
 
     @Override
-    public int getNumberofCities(String countryName, int threshold, int comparison) throws RemoteException {
-        FutureTask<Integer> assignment = new FutureTask<>(() -> {
+    public Result getNumberofCities(String countryName, int threshold, int comparison) throws RemoteException {
+        simulateBaseNetworkLatency();
+        TimedTask<Integer> assignment = new TimedTask<>(() -> {
             String comp = (comparison == 2) ? "max" : "min"; // 1=min (>=), 2=max (<=)
             try {
                 long val = stats.getNumberofCities(countryName, threshold, comp);
@@ -113,7 +118,8 @@ public class Server implements ServerInterface{
         });
         queue.add(assignment);
         try {
-            return assignment.get();
+            int value = assignment.get();
+            return new Result(value, assignment.waitMs(), assignment.execMs());
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
         }
@@ -121,8 +127,9 @@ public class Server implements ServerInterface{
     }
 
     @Override
-    public int getNumberofCountries(int cityCount, int threshold, int comp) throws RemoteException {
-        FutureTask<Integer> assignment = new FutureTask<>(() -> {
+    public Result getNumberofCountries(int cityCount, int threshold, int comp) throws RemoteException {
+        simulateBaseNetworkLatency();
+        TimedTask<Integer> assignment = new TimedTask<>(() -> {
             String comparison = (comp == 2) ? "max" : "min"; // 1=min (>=), 2=max (<=)
             try {
                 long val = stats.getNumberofCountries(cityCount, threshold, comparison);
@@ -135,7 +142,8 @@ public class Server implements ServerInterface{
         });
         queue.add(assignment);
         try {
-            return assignment.get();
+            int value = assignment.get();
+            return new Result(value, assignment.waitMs(), assignment.execMs());
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
         }
@@ -143,8 +151,9 @@ public class Server implements ServerInterface{
     }
 
     @Override
-    public int getNumberofCountriesMM(int cityCount, int minPopulation, int maxPopulation) throws RemoteException {
-        FutureTask<Integer> assignment = new FutureTask<>(() -> {
+    public Result getNumberofCountriesMM(int cityCount, int minPopulation, int maxPopulation) throws RemoteException {
+        simulateBaseNetworkLatency();
+        TimedTask<Integer> assignment = new TimedTask<>(() -> {
             try {
                 long val = stats.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation);
                 return Math.toIntExact(val);
@@ -156,7 +165,8 @@ public class Server implements ServerInterface{
         });
         queue.add(assignment);
         try {
-            return assignment.get();
+            int value = assignment.get();
+            return new Result(value, assignment.waitMs(), assignment.execMs());
         } catch (InterruptedException | ExecutionException e) {
             throw new RemoteException("Error processing request", e);
         }
@@ -175,4 +185,36 @@ public class Server implements ServerInterface{
     public int getPort() { return port; }
     public int getZone() {return zone; }
     public String getBindingName() {return bindingName; }
+
+    private static void simulateBaseNetworkLatency() {
+        try {
+            Thread.sleep(BASE_NETWORK_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static final class TimedTask<V> extends FutureTask<V> {
+        private final long enqueuedAtNs;
+        private volatile long startedAtNs;
+        private volatile long finishedAtNs;
+
+        TimedTask(Callable<V> c) {
+            super(c);
+            this.enqueuedAtNs = System.nanoTime();
+        }
+
+        @Override
+        public void run() {
+            this.startedAtNs = System.nanoTime();
+            try {
+                super.run();
+            } finally {
+                this.finishedAtNs = System.nanoTime();
+            }
+        }
+
+        long waitMs() { return Math.max(0L, (startedAtNs - enqueuedAtNs) / 1_000_000L); }
+        long execMs() { return Math.max(0L, (finishedAtNs - startedAtNs) / 1_000_000L); }
+    }
 }
