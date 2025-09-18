@@ -8,6 +8,8 @@
 ## Quick start:
 
 Run via CLI
+- Build the project
+  - `docker compose build`
 - Run with NO CACHE
   - `docker compose run --rm -e JAVA_ARGS="--client-cache=false --server-cache=false" client`
 
