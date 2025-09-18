@@ -29,11 +29,8 @@ Caching
     - The defualts for the environment variables is true and 150, respectivly.
   - Client: cache enabled via CLI flags passed in `JAVA_ARGS` during building.
     - Client server has: `JAVA_ARGS=--client-cache=${CLIENT_CACHE:-true} --client-cache-cap=${CLIENT_CACHE_CAP:-45}`.
-    - This can be used while building using `CLIENT_CACHE=false && SERVER_CACHE_CAP=5 && docker compose up --build`
+    - This can be used while building using `CLIENT_CACHE=false && CLIENT_CACHE_CAP=5 && docker compose up --build`
     - The defualts for the environment variables is true and 45, respectivly.
-- Alternative (env fallback if you prefer not to use CLI flags):
-  - Server: set `SERVER_CACHE=true` and optional `SERVER_CACHE_CAP=150`.
-  - Client: set `CLIENT_CACHE=true` and optional `CLIENT_CACHE_CAP=45`.
 - Output and verification:
   - Client cache hits are tagged in output lines as `Cache:CLIENT_HIT` and show `ServerZone:? WaitMs:CACHE_HIT ExecMs:CACHE_HIT`.
   - Server cache hits reduce server-side `WaitMs/ExecMs` reported back to the client (no explicit tag).
