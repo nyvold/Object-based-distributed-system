@@ -101,7 +101,7 @@ public class Server implements ServerInterface{
     @Override
     public int getNumberofCities(String countryName, int threshold, int comparison) throws RemoteException {
         FutureTask<Integer> assignment = new FutureTask<>(() -> {
-            String comp = (comparison == 2) ? "max" : "min"; // 1=min (>=), 2=max (<=)
+            String comp = comparison <= 0 ? "max" : "min"; // simple mapping
             try {
                 long val = stats.getNumberofCities(countryName, threshold, comp);
                 return Math.toIntExact(val);
@@ -123,7 +123,7 @@ public class Server implements ServerInterface{
     @Override
     public int getNumberofCountries(int cityCount, int threshold, int comp) throws RemoteException {
         FutureTask<Integer> assignment = new FutureTask<>(() -> {
-            String comparison = (comp == 2) ? "max" : "min"; // 1=min (>=), 2=max (<=)
+            String comparison = comp <= 0 ? "max" : "min";
             try {
                 long val = stats.getNumberofCountries(cityCount, threshold, comparison);
                 return Math.toIntExact(val);

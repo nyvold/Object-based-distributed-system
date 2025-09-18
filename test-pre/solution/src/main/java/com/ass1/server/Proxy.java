@@ -1,5 +1,7 @@
 package com.ass1.server;
 
+import java.rmi.AlreadyBoundException;
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -104,14 +106,26 @@ public class Proxy implements ProxyInterface {
 
     
     public static void main(String[] args) {
+        Registry registry = null;
+        ProxyInterface stub = null;
         try {
-            Registry registry = LocateRegistry.createRegistry(PROXY_PORT);
+            registry = LocateRegistry.createRegistry(PROXY_PORT);
             Proxy proxy = new Proxy(registry);
-            ProxyInterface stub = (ProxyInterface) UnicastRemoteObject.exportObject(proxy, 0);
-            registry.rebind("Proxy", stub); // rebind instead of bind so we dont have to unbind "Proxy" every time we restart or redeploy (because of AlreadyBoundException)
+            stub = (ProxyInterface) UnicastRemoteObject.exportObject(proxy, 0);
+            registry.bind("Proxy", stub); // rebind instead of bind so we dont have to unbind "Proxy" every time we restart or redeploy (because of AlreadyBoundException)
             System.out.println("[Proxy] Proxy started and bound in registry as 'Proxy' on port 1099.");
-        } catch (RemoteException e) {
-            e.printStackTrace();
+        } catch (RemoteException | AlreadyBoundException e) {
+            System.out.println("[Proxy] Proxy already bound in registry as 'Proxy'.");
+            try {
+                registry.unbind("Proxy");
+                registry.bind("Proxy", stub);
+            } catch (RemoteException | NotBoundException | AlreadyBoundException ex) {
+                System.out.println("[Proxy] Failed to unbind and bind 'Proxy' in registry");
+                ex.printStackTrace();
+            }
+            
+            System.out.println("[Proxy] unbind and bind Proxy in registry as 'Proxy' on port 1099");
+
         }
     }
 }
