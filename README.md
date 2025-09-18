@@ -23,11 +23,14 @@ Caching
   - Server cache: up to 150 entries (zone-local, per server)
   - Client cache: up to 45 entries
 - How to enable (Compose, default in this repo):
-  - Servers: cache enabled via CLI flags passed in `JAVA_ARGS`.
-    - See `docker-compose.yml:115`, `docker-compose.yml:157`, `docker-compose.yml:199`, `docker-compose.yml:222`, `docker-compose.yml:264`.
-      Each server has `JAVA_ARGS=--server-cache=true --server-cache-cap=150`.
-  - Client: cache enabled via CLI flags passed in `JAVA_ARGS`.
-    - See `docker-compose.yml:106` (`client` service): `JAVA_ARGS=--client-cache=true --client-cache-cap=45`.
+  - Servers: cache enabled via CLI flags passed in `JAVA_ARGS` during building.
+    - Each server has `JAVA_ARGS=--server-cache=${SERVER_CACHE:-true} --server-cache-cap=${SERVER_CACHE_CAP:-150}`.
+    - This can be used while building using `SERVER_CACHE=false && SERVER_CACHE_CAP=20 && docker compose up --build`
+    - The defualts for the environment variables is true and 150, respectivly.
+  - Client: cache enabled via CLI flags passed in `JAVA_ARGS` during building.
+    - Client server has: `JAVA_ARGS=--client-cache=${CLIENT_CACHE:-true} --client-cache-cap=${CLIENT_CACHE_CAP:-45}`.
+    - This can be used while building using `CLIENT_CACHE=false && SERVER_CACHE_CAP=5 && docker compose up --build`
+    - The defualts for the environment variables is true and 45, respectivly.
 - Alternative (env fallback if you prefer not to use CLI flags):
   - Server: set `SERVER_CACHE=true` and optional `SERVER_CACHE_CAP=150`.
   - Client: set `CLIENT_CACHE=true` and optional `CLIENT_CACHE_CAP=45`.
