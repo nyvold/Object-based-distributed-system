@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
-// no concurrency imports needed in the sequential client
 import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -20,10 +19,8 @@ import com.ass1.server.Result;
 import com.ass1.server.ServerConnection;
 import com.ass1.server.ServerInterface;
 
-import com.ass1.server.Latency;
 
 public class Client {
-
     private static final Logger logger = Logger.getLogger(Client.class.getName());
     public List<Query> queries = new ArrayList<>();
     // Client-side LRU cache (accessOrder)
@@ -86,7 +83,6 @@ public class Client {
             if (parent != null)
                 parent.mkdirs();
             try (FileWriter fw = new FileWriter(outFile, false)) {
-                // Human-readable header
                 fw.write(
                         "# Columns: result|ERROR method args Zone:N ServerZone:Z WaitMs ExecMs TurnMs TotalMs Cache [errorType]\\n");
                 logger.info("Cleared output and wrote header: " + outputPath);
@@ -108,7 +104,7 @@ public class Client {
         logger.info("Finished sending all queries.");
     }
 
-
+    // iterates through the list of queries and executes them
     public void sendQueries() {
         String outputPath = selectOutputPath();
         String metricsPath = System.getenv().getOrDefault("METRICS_PATH", deriveMetricsPath(outputPath));
@@ -169,6 +165,8 @@ public class Client {
                     logger.info("Connected to server: " + serverConn.getBindingName());
 
                     long callStart = System.nanoTime();
+
+                    // checks the method-name of the query to execute the right one by remote method invocation
                     Result r;
                     if (query.methodName.equals("getPopulationofCountry") && query.args.size() == 1) {
                         String countryName = query.args.get(0);
@@ -241,8 +239,7 @@ public class Client {
         logger.info("Client summary: processed=" + processed + ", successful=" + successful + ", failed=" + failed);
     }
 
-    // (removed old concurrent helper)
-
+    // selects output-path based on enabled caches
     private static String selectOutputPath() {
         String configured = System.getenv("OUTPUT_PATH");
         String base;
