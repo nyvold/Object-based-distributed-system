@@ -104,6 +104,13 @@ public class Client {
              FileWriter mw = new FileWriter(metricsPath, true)) {
             for (Query query : queries) {
                 try {
+                    // TA mentioned client needs to sleep 10ms between queries
+                    Thread.sleep(10);
+                } catch (Exception e) {
+                    logger.info("Client unable to sleep! " + e.getMessage());
+                }
+
+                try {
                     processed++;
                     logger.info("Processing query: " + query);
                     long t0 = System.nanoTime();
