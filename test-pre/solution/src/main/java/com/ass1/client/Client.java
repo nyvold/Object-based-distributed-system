@@ -13,6 +13,10 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.ass1.server.ProxyInterface;
 import com.ass1.server.Result;
@@ -104,139 +108,181 @@ public class Client {
         logger.info("Finished sending all queries.");
     }
 
+    // Status for processing a single query
+    private enum ResultStatus { OK, CACHE_HIT, INVALID, ERROR }
+
     // iterates through the list of queries and executes them
     public void sendQueries() {
         String outputPath = selectOutputPath();
         String metricsPath = System.getenv().getOrDefault("METRICS_PATH", deriveMetricsPath(outputPath));
-        int processed = 0, successful = 0, failed = 0;
         try (FileWriter fw = new FileWriter(outputPath, true);
-                FileWriter mw = new FileWriter(metricsPath, true)) {
+             FileWriter mw = new FileWriter(metricsPath, true)) {
+
+            int threads = parseIntEnv("CLIENT_THREADS", Math.max(1, Runtime.getRuntime().availableProcessors()));
+            ExecutorService pool = Executors.newFixedThreadPool(threads);
+
+            AtomicInteger processed = new AtomicInteger(0);
+            AtomicInteger successful = new AtomicInteger(0);
+            AtomicInteger failed = new AtomicInteger(0);
+
             for (Query query : queries) {
-
-                try {
-                    processed++;
-                    logger.info("Processing query: " + query);
-                    long t0 = System.nanoTime();
-                    long startMs = System.currentTimeMillis();
-
-                    // Client cache pre-check
-                    String ckey = cacheKey(query);
-                    if (CLIENT_CACHE_ENABLED) {
-                        Integer hitVal = clientCache.get(ckey);
-                        if (hitVal != null) {
-                            long t1 = System.nanoTime();
-                            long totalMs = (t1 - t0) / 1_000_000L;
-                            String line = (hitVal + " ") + query.toString() +
-                                    " ServerZone:? WaitMs:CACHE_HIT ExecMs:CACHE_HIT TurnMs:0 TotalMs:" + totalMs +
-                                    " Cache:CLIENT_HIT" + System.lineSeparator();
-                            fw.write(line);
-                            // metrics CSV
-                            mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
-                                    query.zone + ",," + hitVal + ",CACHE_HIT,0,0,0," + totalMs + "," +
-                                    startMs + "," + System.currentTimeMillis() + "\n");
-                            fw.flush();
-                            successful++;
-                            logger.info("Client cache HIT; size=" + clientCache.size());
-                            continue;
-                        }
+                pool.submit(() -> {
+                    processed.incrementAndGet();
+                    ResultStatus status = processQuery(query, fw, mw, outputPath, metricsPath);
+                    if (status == ResultStatus.OK || status == ResultStatus.CACHE_HIT) {
+                        successful.incrementAndGet();
+                    } else if (status == ResultStatus.ERROR) {
+                        failed.incrementAndGet();
                     }
-
-                    String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "proxy");
-                    Registry registry = LocateRegistry.getRegistry(proxyHost, 1099);
-                    ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
-                    logger.info("Connected to proxy.");
-
-                    ServerConnection serverConn = proxy.connectToServer(query.zone);
-
-                    try {
-                        // TA mentioned client needs to sleep 10ms between queries
-                        Thread.sleep(
-                          10
-                        );
-                    } catch (Exception e) {
-                        logger.info("Client unable to sleep! " + e.getMessage());
-                    }
-
-                    logger.info("Proxy assigned server: " + serverConn.getBindingName() + " at "
-                            + serverConn.getServerAddress() + ":" + serverConn.getServerPort());
-
-                    registry = LocateRegistry.getRegistry(serverConn.getServerAddress(), serverConn.getServerPort());
-                    ServerInterface server = (ServerInterface) registry.lookup(serverConn.getBindingName());
-                    logger.info("Connected to server: " + serverConn.getBindingName());
-
-                    long callStart = System.nanoTime();
-
-                    // checks the method-name of the query to execute the right one by remote method invocation
-                    Result r;
-                    if (query.methodName.equals("getPopulationofCountry") && query.args.size() == 1) {
-                        String countryName = query.args.get(0);
-                        r = server.getPopulationofCountry(countryName, query.zone);
-                    } else if (query.methodName.equals("getNumberofCities") && query.args.size() == 3) {
-                        String countryName = query.args.get(0);
-                        int threshold = Integer.parseInt(query.args.get(1));
-                        int comparison = Integer.parseInt(query.args.get(2));
-                        r = server.getNumberofCities(countryName, threshold, comparison, query.zone);
-                    } else if (query.methodName.equals("getNumberofCountries") && query.args.size() == 3) {
-                        int cityCount = Integer.parseInt(query.args.get(0));
-                        int threshold = Integer.parseInt(query.args.get(1));
-                        int comparison = Integer.parseInt(query.args.get(2));
-                        r = server.getNumberofCountries(cityCount, threshold, comparison, query.zone);
-                    } else if (query.methodName.equals("getNumberofCountriesMM") && query.args.size() == 3) {
-                        int cityCount = Integer.parseInt(query.args.get(0));
-                        int minPopulation = Integer.parseInt(query.args.get(1));
-                        int maxPopulation = Integer.parseInt(query.args.get(2));
-                        r = server.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation, query.zone);
-                    } else {
-                        String res = "Invalid query: " + query.toString();
-                        logger.warning(res);
-                        long t1 = System.nanoTime();
-                        long totalMs = (t1 - t0) / 1_000_000L;
-                        fw.write(res + System.lineSeparator());
-                        mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
-                                query.zone + ",,," + csv("INVALID") + ",,," + totalMs + "," +
-                                startMs + "," + System.currentTimeMillis() + "\n");
-                        continue;
-                    }
-
-                    long t1 = System.nanoTime();
-                    long totalMs = (t1 - t0) / 1_000_000L;
-                    long turnMs = (t1 - callStart) / 1_000_000L;
-                    String line = (r.getValue() + " ") + query.toString() +
-                            " ServerZone:" + serverConn.getZone() +
-                            " WaitMs:" + r.getWaitMs() +
-                            " ExecMs:" + r.getExecMs() +
-                            " TurnMs:" + turnMs +
-                            " TotalMs:" + totalMs + System.lineSeparator();
-                    fw.write(line);
-                    if (CLIENT_CACHE_ENABLED)
-                        clientCache.put(ckey, r.getValue());
-                    mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
-                            query.zone + "," + serverConn.getZone() + "," + r.getValue() + ",OK," +
-                            r.getWaitMs() + "," + r.getExecMs() + "," + turnMs + "," + totalMs + "," +
-                            startMs + "," + System.currentTimeMillis() + "\n");
-                    fw.flush();
-                    successful++;
-                    logger.info("Wrote result to: " + outputPath);
-                } catch (Exception e) {
-                    logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
-                    try {
-                        long nowMs = System.currentTimeMillis();
-                        fw.write("ERROR " + query.toString() + " " + e.getClass().getSimpleName()
-                                + System.lineSeparator());
-                        mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
-                                query.zone + ",,," + csv("ERROR:" + e.getClass().getSimpleName()) + ",,,," +
-                                nowMs + "," + nowMs + "\n");
-                        fw.flush();
-                        failed++;
-                    } catch (IOException ioe) {
-                        logger.log(Level.SEVERE, "Also failed to write error to output", ioe);
-                    }
-                }
+                });
             }
+
+            pool.shutdown();
+            try {
+                pool.awaitTermination(7, TimeUnit.DAYS);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+
+            logger.info("Client summary: processed=" + processed.get() + ", successful=" + successful.get() + ", failed=" + failed.get());
         } catch (IOException e) {
             logger.log(Level.SEVERE, "Failed to write to output: " + outputPath, e);
         }
-        logger.info("Client summary: processed=" + processed + ", successful=" + successful + ", failed=" + failed);
+        return;
+    }
+
+    private ResultStatus processQuery(Query query, FileWriter fw, FileWriter mw, String outputPath, String metricsPath) {
+        try {
+            logger.info("Processing query: " + query);
+            long t0 = System.nanoTime();
+            long startMs = System.currentTimeMillis();
+
+            // Client cache pre-check
+            String ckey = cacheKey(query);
+            if (CLIENT_CACHE_ENABLED) {
+                Integer hitVal = clientCache.get(ckey);
+                if (hitVal != null) {
+                    long t1 = System.nanoTime();
+                    long totalMs = (t1 - t0) / 1_000_000L;
+                    String line = (hitVal + " ") + query.toString() +
+                            " ServerZone:? WaitMs:CACHE_HIT ExecMs:CACHE_HIT TurnMs:0 TotalMs:" + totalMs +
+                            " Cache:CLIENT_HIT" + System.lineSeparator();
+                    synchronized (fw) {
+                        fw.write(line);
+                        fw.flush();
+                    }
+                    synchronized (mw) {
+                        mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
+                                query.zone + ",," + hitVal + ",CACHE_HIT,0,0,0," + totalMs + "," +
+                                startMs + "," + System.currentTimeMillis() + "\n");
+                    }
+                    logger.info("Client cache HIT; size=" + clientCache.size());
+                    return ResultStatus.CACHE_HIT;
+                }
+            }
+
+            String proxyHost = System.getenv().getOrDefault("PROXY_HOST", "proxy");
+            Registry registry = LocateRegistry.getRegistry(proxyHost, 1099);
+            ProxyInterface proxy = (ProxyInterface) registry.lookup("Proxy");
+            logger.info("Connected to proxy.");
+
+            ServerConnection serverConn = proxy.connectToServer(query.zone);
+
+            try {
+                // TA mentioned client needs to sleep 10ms between queries
+                Thread.sleep(10);
+            } catch (Exception e) {
+                logger.info("Client unable to sleep! " + e.getMessage());
+            }
+
+            logger.info("Proxy assigned server: " + serverConn.getBindingName() + " at "
+                    + serverConn.getServerAddress() + ":" + serverConn.getServerPort());
+
+            registry = LocateRegistry.getRegistry(serverConn.getServerAddress(), serverConn.getServerPort());
+            ServerInterface server = (ServerInterface) registry.lookup(serverConn.getBindingName());
+            logger.info("Connected to server: " + serverConn.getBindingName());
+
+            long callStart = System.nanoTime();
+
+            // checks the method-name of the query to execute the right one by remote method invocation
+            Result r;
+            if (query.methodName.equals("getPopulationofCountry") && query.args.size() == 1) {
+                String countryName = query.args.get(0);
+                r = server.getPopulationofCountry(countryName, query.zone);
+            } else if (query.methodName.equals("getNumberofCities") && query.args.size() == 3) {
+                String countryName = query.args.get(0);
+                int threshold = Integer.parseInt(query.args.get(1));
+                int comparison = Integer.parseInt(query.args.get(2));
+                r = server.getNumberofCities(countryName, threshold, comparison, query.zone);
+            } else if (query.methodName.equals("getNumberofCountries") && query.args.size() == 3) {
+                int cityCount = Integer.parseInt(query.args.get(0));
+                int threshold = Integer.parseInt(query.args.get(1));
+                int comparison = Integer.parseInt(query.args.get(2));
+                r = server.getNumberofCountries(cityCount, threshold, comparison, query.zone);
+            } else if (query.methodName.equals("getNumberofCountriesMM") && query.args.size() == 3) {
+                int cityCount = Integer.parseInt(query.args.get(0));
+                int minPopulation = Integer.parseInt(query.args.get(1));
+                int maxPopulation = Integer.parseInt(query.args.get(2));
+                r = server.getNumberofCountriesMM(cityCount, minPopulation, maxPopulation, query.zone);
+            } else {
+                String res = "Invalid query: " + query.toString();
+                logger.warning(res);
+                long t1 = System.nanoTime();
+                long totalMs = (t1 - t0) / 1_000_000L;
+                synchronized (fw) {
+                    fw.write(res + System.lineSeparator());
+                    fw.flush();
+                }
+                synchronized (mw) {
+                    mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
+                            query.zone + ",,," + csv("INVALID") + ",,," + totalMs + "," +
+                            startMs + "," + System.currentTimeMillis() + "\n");
+                }
+                return ResultStatus.INVALID;
+            }
+
+            long t1 = System.nanoTime();
+            long totalMs = (t1 - t0) / 1_000_000L;
+            long turnMs = (t1 - callStart) / 1_000_000L;
+            String line = (r.getValue() + " ") + query.toString() +
+                    " ServerZone:" + serverConn.getZone() +
+                    " WaitMs:" + r.getWaitMs() +
+                    " ExecMs:" + r.getExecMs() +
+                    " TurnMs:" + turnMs +
+                    " TotalMs:" + totalMs + System.lineSeparator();
+            synchronized (fw) {
+                fw.write(line);
+                fw.flush();
+            }
+            if (CLIENT_CACHE_ENABLED)
+                clientCache.put(ckey, r.getValue());
+            synchronized (mw) {
+                mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
+                        query.zone + "," + serverConn.getZone() + "," + r.getValue() + ",OK," +
+                        r.getWaitMs() + "," + r.getExecMs() + "," + turnMs + "," + totalMs + "," +
+                        startMs + "," + System.currentTimeMillis() + "\n");
+            }
+            logger.info("Wrote result to: " + outputPath);
+            return ResultStatus.OK;
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Exception while processing query: " + query, e);
+            try {
+                long nowMs = System.currentTimeMillis();
+                synchronized (fw) {
+                    fw.write("ERROR " + query.toString() + " " + e.getClass().getSimpleName()
+                            + System.lineSeparator());
+                    fw.flush();
+                }
+                synchronized (mw) {
+                    mw.write(csv(query.methodName) + "," + csv(String.join(" ", query.args)) + "," +
+                            query.zone + ",,," + csv("ERROR:" + e.getClass().getSimpleName()) + ",,,," +
+                            nowMs + "," + nowMs + "\n");
+                }
+            } catch (IOException ioe) {
+                logger.log(Level.SEVERE, "Also failed to write error to output", ioe);
+            }
+            return ResultStatus.ERROR;
+        }
     }
 
     // selects output-path based on enabled caches

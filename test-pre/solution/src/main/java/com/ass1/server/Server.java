@@ -16,6 +16,7 @@ import java.util.concurrent.Callable;
 import java.rmi.NotBoundException;
 import java.sql.SQLException;
 import java.util.logging.Logger;
+import java.util.logging.Level;
 // + New imports for file logging
 import java.io.File;
 import java.io.FileWriter;
@@ -24,6 +25,7 @@ import java.io.PrintWriter;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Server implements ServerInterface{
     private static final Logger logger = Logger.getLogger(Server.class.getName());
@@ -43,10 +45,11 @@ public class Server implements ServerInterface{
         }
     };
     private static final int BASE_NETWORK_MS = 80; // base communication latency per assignment
-    private static final int EXEC_DELAY_MS = parseIntEnv("SERVER_EXEC_DELAY_MS", 0); // optional simulated exec time
+    private static final int EXEC_DELAY_MS = parseIntEnv("SERVER_EXEC_DELAY_MS", 80); // optional simulated exec time
     // + Scheduler and Writer for file-based logging
     private final ScheduledExecutorService logScheduler = Executors.newSingleThreadScheduledExecutor();
     private PrintWriter logWriter;
+    private final AtomicBoolean workerBusy = new AtomicBoolean(false);
 
     public Server(
         String address,
@@ -65,7 +68,12 @@ public class Server implements ServerInterface{
             while (true) {
                 try {
                     FutureTask<?> assignment = queue.take();
-                    assignment.run();
+                    workerBusy.set(true);
+                    try {
+                        assignment.run();
+                    } finally {
+                        workerBusy.set(false);
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
@@ -144,11 +152,15 @@ public class Server implements ServerInterface{
 
         // Define the logging task.
         Runnable logTask = () -> {
-            if (this.logWriter != null) {
-                long currentTimeMs = System.currentTimeMillis();
-                int currentQueueSize = queue.size();
-                // Write the data as a new line in the CSV file.
-                this.logWriter.println(currentTimeMs + "," + currentQueueSize);
+            try {
+                if (this.logWriter != null) {
+                    long currentTimeMs = System.currentTimeMillis();
+                    int effectiveLoad = getCurrentLoad(); // include in-flight work
+                    this.logWriter.println(currentTimeMs + "," + effectiveLoad);
+                    this.logWriter.flush();
+                }
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Queue size logging failed", e);
             }
         };
 
@@ -157,6 +169,11 @@ public class Server implements ServerInterface{
 
         // Add a shutdown hook to ensure the log file is properly closed when the server stops.
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                if (logScheduler != null) {
+                    logScheduler.shutdownNow();
+                }
+            } catch (Exception ignore) {}
             if (logWriter != null) {
                 logWriter.close();
                 System.out.println("[Server 1] Queue log file closed.");
@@ -183,6 +200,7 @@ public class Server implements ServerInterface{
                 return Integer.MAX_VALUE;
             }
         });
+        assignment.markEnqueued();
         queue.add(assignment);
         try {
             int value = assignment.get();
@@ -216,6 +234,7 @@ public class Server implements ServerInterface{
                 return Integer.MAX_VALUE;
             }
         });
+        assignment.markEnqueued();
         queue.add(assignment);
         try {
             int value = assignment.get();
@@ -249,6 +268,7 @@ public class Server implements ServerInterface{
                 return Integer.MAX_VALUE;
             }
         });
+        assignment.markEnqueued();
         queue.add(assignment);
         try {
             int value = assignment.get();
@@ -281,6 +301,7 @@ public class Server implements ServerInterface{
                 return Integer.MAX_VALUE;
             }
         });
+        assignment.markEnqueued();
         queue.add(assignment);
         try {
             int value = assignment.get();
@@ -294,7 +315,7 @@ public class Server implements ServerInterface{
         }
     }
 
-    public int getCurrentLoad() { return queue.size(); }
+    public int getCurrentLoad() { return queue.size() + (workerBusy.get() ? 1 : 0); }
 
     @Override
     public String toString() {
@@ -335,14 +356,16 @@ public class Server implements ServerInterface{
     }
 
     private static final class TimedTask<V> extends FutureTask<V> {
-        private final long enqueuedAtNs;
+        private volatile long enqueuedAtNs;
         private volatile long startedAtNs;
         private volatile long finishedAtNs;
 
         TimedTask(Callable<V> c) {
             super(c);
-            this.enqueuedAtNs = System.nanoTime();
+            // enqueuedAtNs will be set via markEnqueued()
         }
+
+        void markEnqueued() { this.enqueuedAtNs = System.nanoTime(); }
 
         @Override
         public void run() {
@@ -354,7 +377,8 @@ public class Server implements ServerInterface{
             }
         }
 
-        long waitMs() { return Math.max(0L, (startedAtNs - enqueuedAtNs) / 1_000_000L); }
+        long waitMs() { return Math.max(0L, totalMs() - execMs()); }
         long execMs() { return Math.max(0L, (finishedAtNs - startedAtNs) / 1_000_000L); }
+        long totalMs() { return Math.max(0L, (finishedAtNs - enqueuedAtNs) / 1_000_000L); }
     }
 }
