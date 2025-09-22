@@ -113,6 +113,8 @@ services:
       - JVM_OPTS=-Djava.rmi.server.hostname=server1
       - DB_URL=jdbc:postgresql://db1:5432/ass1_zone1
       - JAVA_ARGS=--server-cache=${SERVER_CACHE:-true} --server-cache-cap=${SERVER_CACHE_CAP:-150}
+      - SERVER1_LOG_PATH=/app/logs/server1_queue.csv
+      - ZONE=1
     env_file:
       - infra/db/zone1/app.env
     depends_on:
@@ -122,6 +124,8 @@ services:
         condition: service_healthy
     networks:
       - ass1net
+    volumes:
+      - ./server-logs:/app/logs
 
   seed1:
     build:
@@ -155,6 +159,7 @@ services:
       - JVM_OPTS=-Djava.rmi.server.hostname=server2
       - DB_URL=jdbc:postgresql://db2:5432/ass1_zone2
       - JAVA_ARGS=--server-cache=${SERVER_CACHE:-true} --server-cache-cap=${SERVER_CACHE_CAP:-150}
+      - SERVER1_LOG_PATH=/app/logs/server1_queue.csv
     env_file:
       - infra/db/zone2/app.env
     depends_on:
@@ -164,6 +169,8 @@ services:
         condition: service_healthy
     networks:
       - ass1net
+    volumes:
+      - ./server-logs:/app/logs
 
   seed2:
     build:
@@ -197,6 +204,7 @@ services:
       - JVM_OPTS=-Djava.rmi.server.hostname=server3
       - DB_URL=jdbc:postgresql://db3:5432/ass1_zone3
       - JAVA_ARGS=--server-cache=${SERVER_CACHE:-true} --server-cache-cap=${SERVER_CACHE_CAP:-150}
+      - SERVER1_LOG_PATH=/app/logs/server1_queue.csv
     env_file:
       - infra/db/zone3/app.env
     depends_on:
@@ -206,6 +214,8 @@ services:
         condition: service_healthy
     networks:
       - ass1net
+    volumes:
+      - ./server-logs:/app/logs
 
   seed3:
     build:
@@ -239,6 +249,7 @@ services:
       - JVM_OPTS=-Djava.rmi.server.hostname=server4
       - DB_URL=jdbc:postgresql://db4:5432/ass1_zone4
       - JAVA_ARGS=--server-cache=${SERVER_CACHE:-true} --server-cache-cap=${SERVER_CACHE_CAP:-150}
+      - SERVER1_LOG_PATH=/app/logs/server1_queue.csv
     env_file:
       - infra/db/zone4/app.env
     depends_on:
@@ -248,6 +259,8 @@ services:
         condition: service_healthy
     networks:
       - ass1net
+    volumes:
+      - ./server-logs:/app/logs
 
   seed4:
     build:
@@ -281,6 +294,7 @@ services:
       - JVM_OPTS=-Djava.rmi.server.hostname=server5
       - DB_URL=jdbc:postgresql://db5:5432/ass1_zone5
       - JAVA_ARGS=--server-cache=${SERVER_CACHE:-true} --server-cache-cap=${SERVER_CACHE_CAP:-150}
+      - SERVER1_LOG_PATH=/app/logs/server1_queue.csv
     env_file:
       - infra/db/zone5/app.env
     depends_on:
@@ -290,6 +304,8 @@ services:
         condition: service_healthy
     networks:
       - ass1net
+    volumes:
+      - ./server-logs:/app/logs
 
   seed5:
     build:
