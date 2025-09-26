@@ -1,5 +1,5 @@
 # Project setup and run guide
-
+An object-based distributed system simulating client-server remote communication on a local machine. The system consists of a distributed International Statistics Service.
 ## Requirements
 - Docker Desktop or Docker Engine (with Compose v2)
 - ~4 GB free RAM for containers (5 Postgres, 5 servers, 1 proxy, 1 client, 5 seeders)
